@@ -7,7 +7,7 @@ import { dirname, join } from 'node:path';
 
 const BG = [79, 70, 229]; // brand indigo #4F46E5 (= token --accent-ish / badge)
 const FG = [255, 255, 255]; // white plane
-const SIZES = [16, 48, 128];
+const SIZES = [16, 48, 128, 300]; // 300 = Edge Add-ons store logo
 const SS = 4; // supersampling factor for anti-aliasing
 const OUT = join(dirname(fileURLToPath(import.meta.url)), '..', 'icons');
 
