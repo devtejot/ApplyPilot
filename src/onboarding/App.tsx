@@ -101,10 +101,10 @@ export function App() {
         <Card label="About you" className="p-6">
           <p className="mb-4 text-sm text-fg-muted">Stored only on this device. Used to autofill applications.</p>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <Row label="First name" value={profile.personal.firstName} onChange={(v) => setPersonal({ firstName: v })} />
-            <Row label="Last name" value={profile.personal.lastName} onChange={(v) => setPersonal({ lastName: v })} />
-            <Row label="Email" type="email" value={profile.personal.email} onChange={(v) => setPersonal({ email: v })} />
-            <Row label="Phone" type="tel" value={profile.personal.phone} onChange={(v) => setPersonal({ phone: v })} />
+            <Row label="First name" placeholder="Jane" value={profile.personal.firstName} onChange={(v) => setPersonal({ firstName: v })} />
+            <Row label="Last name" placeholder="Doe" value={profile.personal.lastName} onChange={(v) => setPersonal({ lastName: v })} />
+            <Row label="Email" type="email" placeholder="jane.doe@example.com" value={profile.personal.email} onChange={(v) => setPersonal({ email: v })} />
+            <Row label="Phone" type="tel" placeholder="+1 (555) 123-4567" value={profile.personal.phone} onChange={(v) => setPersonal({ phone: v })} />
           </div>
           <StepNav onBack={back} onNext={advanceFromProfile} />
         </Card>

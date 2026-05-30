@@ -137,22 +137,22 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
 
       <Section title="Personal">
         <Grid>
-          <Field label="First name" value={profile.personal.firstName} onChange={(v) => setPersonal({ firstName: v })} />
-          <Field label="Last name" value={profile.personal.lastName} onChange={(v) => setPersonal({ lastName: v })} />
-          <Field label="Email" type="email" value={profile.personal.email} onChange={(v) => setPersonal({ email: v })} />
-          <Field label="Phone" type="tel" value={profile.personal.phone} onChange={(v) => setPersonal({ phone: v })} />
-          <Field label="City" value={profile.personal.location.city} onChange={(v) => setLocation({ city: v })} />
-          <Field label="State" value={profile.personal.location.state} onChange={(v) => setLocation({ state: v })} />
-          <Field label="Country" value={profile.personal.location.country} onChange={(v) => setLocation({ country: v })} />
-          <Field label="Postal code" value={profile.personal.location.postalCode ?? ''} onChange={(v) => setLocation({ postalCode: v })} />
+          <Field label="First name" placeholder="Jane" value={profile.personal.firstName} onChange={(v) => setPersonal({ firstName: v })} />
+          <Field label="Last name" placeholder="Doe" value={profile.personal.lastName} onChange={(v) => setPersonal({ lastName: v })} />
+          <Field label="Email" type="email" placeholder="jane.doe@example.com" value={profile.personal.email} onChange={(v) => setPersonal({ email: v })} />
+          <Field label="Phone" type="tel" placeholder="+1 (555) 123-4567" value={profile.personal.phone} onChange={(v) => setPersonal({ phone: v })} />
+          <Field label="City" placeholder="San Francisco" value={profile.personal.location.city} onChange={(v) => setLocation({ city: v })} />
+          <Field label="State" placeholder="CA" value={profile.personal.location.state} onChange={(v) => setLocation({ state: v })} />
+          <Field label="Country" placeholder="United States" value={profile.personal.location.country} onChange={(v) => setLocation({ country: v })} />
+          <Field label="Postal code" placeholder="94102" value={profile.personal.location.postalCode ?? ''} onChange={(v) => setLocation({ postalCode: v })} />
         </Grid>
       </Section>
 
       <Section title="Links">
         <Grid>
-          <Field label="LinkedIn" value={profile.personal.links.linkedin ?? ''} onChange={(v) => setLinks({ linkedin: v })} />
-          <Field label="GitHub" value={profile.personal.links.github ?? ''} onChange={(v) => setLinks({ github: v })} />
-          <Field label="Portfolio" value={profile.personal.links.portfolio ?? ''} onChange={(v) => setLinks({ portfolio: v })} />
+          <Field label="LinkedIn" placeholder="https://linkedin.com/in/janedoe" value={profile.personal.links.linkedin ?? ''} onChange={(v) => setLinks({ linkedin: v })} />
+          <Field label="GitHub" placeholder="https://github.com/janedoe" value={profile.personal.links.github ?? ''} onChange={(v) => setLinks({ github: v })} />
+          <Field label="Portfolio" placeholder="https://janedoe.dev" value={profile.personal.links.portfolio ?? ''} onChange={(v) => setLinks({ portfolio: v })} />
         </Grid>
       </Section>
 
@@ -163,7 +163,7 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
           <Check label="Willing to relocate" checked={profile.eligibility.willingToRelocate} onChange={(v) => setEligibility({ willingToRelocate: v })} />
         </div>
         <div className="mt-3">
-          <Field label="Desired salary" value={profile.eligibility.desiredSalary ?? ''} onChange={(v) => setEligibility({ desiredSalary: v })} />
+          <Field label="Desired salary" placeholder="$120,000" value={profile.eligibility.desiredSalary ?? ''} onChange={(v) => setEligibility({ desiredSalary: v })} />
         </div>
       </Section>
 
@@ -187,7 +187,7 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
       </Section>
 
       <Section title="Skills">
-        <Field label="Comma-separated" value={profile.skills.join(', ')} onChange={(v) => setProfile((p) => ({ ...p, skills: splitList(v) }))} />
+        <Field label="Comma-separated" placeholder="React, TypeScript, Node.js" value={profile.skills.join(', ')} onChange={(v) => setProfile((p) => ({ ...p, skills: splitList(v) }))} />
       </Section>
 
       <Section title="Work history">
@@ -319,8 +319,8 @@ function WorkHistory({ items, onChange }: { items: WorkItem[]; onChange: (items:
       render={(it, i) => (
         <>
           <Grid>
-            <Field label="Company" value={it.company} onChange={(v) => update(i, { company: v })} />
-            <Field label="Title" value={it.title} onChange={(v) => update(i, { title: v })} />
+            <Field label="Company" placeholder="Acme Inc" value={it.company} onChange={(v) => update(i, { company: v })} />
+            <Field label="Title" placeholder="Senior Software Engineer" value={it.title} onChange={(v) => update(i, { title: v })} />
             <Field label="Start" value={it.startDate} onChange={(v) => update(i, { startDate: v })} placeholder="2021-03" />
             <Field label="End" value={it.endDate} onChange={(v) => update(i, { endDate: v })} placeholder="present" />
           </Grid>
@@ -347,9 +347,9 @@ function EducationList({ items, onChange }: { items: EducationItem[]; onChange: 
       addLabel="+ Add education"
       render={(it, i) => (
         <Grid>
-          <Field label="School" value={it.school} onChange={(v) => update(i, { school: v })} />
-          <Field label="Degree" value={it.degree} onChange={(v) => update(i, { degree: v })} />
-          <Field label="Field" value={it.field} onChange={(v) => update(i, { field: v })} />
+          <Field label="School" placeholder="UC Berkeley" value={it.school} onChange={(v) => update(i, { school: v })} />
+          <Field label="Degree" placeholder="B.S." value={it.degree} onChange={(v) => update(i, { degree: v })} />
+          <Field label="Field" placeholder="Computer Science" value={it.field} onChange={(v) => update(i, { field: v })} />
           <Field label="End year" value={it.endDate ?? ''} onChange={(v) => update(i, { endDate: v })} placeholder="2018" />
         </Grid>
       )}
@@ -368,8 +368,8 @@ function ProjectList({ items, onChange }: { items: ProjectItem[]; onChange: (i: 
       render={(it, i) => (
         <>
           <Grid>
-            <Field label="Name" value={it.name} onChange={(v) => update(i, { name: v })} />
-            <Field label="URL" value={it.url ?? ''} onChange={(v) => update(i, { url: v })} />
+            <Field label="Name" placeholder="Personal portfolio" value={it.name} onChange={(v) => update(i, { name: v })} />
+            <Field label="URL" placeholder="https://github.com/janedoe/portfolio" value={it.url ?? ''} onChange={(v) => update(i, { url: v })} />
           </Grid>
           <FieldWrap label="Description" className="mt-2">
             <Textarea rows={2} value={it.description} onChange={(e) => update(i, { description: e.target.value })} />
@@ -390,8 +390,8 @@ function CertList({ items, onChange }: { items: CertItem[]; onChange: (i: CertIt
       addLabel="+ Add certification"
       render={(it, i) => (
         <Grid>
-          <Field label="Name" value={it.name} onChange={(v) => update(i, { name: v })} />
-          <Field label="Issuer" value={it.issuer} onChange={(v) => update(i, { issuer: v })} />
+          <Field label="Name" placeholder="AWS Solutions Architect" value={it.name} onChange={(v) => update(i, { name: v })} />
+          <Field label="Issuer" placeholder="Amazon Web Services" value={it.issuer} onChange={(v) => update(i, { issuer: v })} />
           <Field label="Date" value={it.date ?? ''} onChange={(v) => update(i, { date: v })} placeholder="2023" />
         </Grid>
       )}

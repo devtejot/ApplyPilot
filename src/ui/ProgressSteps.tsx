@@ -31,7 +31,7 @@ export function ProgressSteps({ steps, current, labeled, className }: ProgressSt
               >
                 {done ? <Check className="h-3 w-3" /> : i + 1}
               </span>
-              <span className={cn('text-xs', active ? 'font-medium text-fg' : 'text-fg-subtle')}>{label}</span>
+              <span className={cn('whitespace-nowrap text-xs', active ? 'font-medium text-fg' : 'text-fg-subtle')}>{label}</span>
               {i < steps.length - 1 && <span className="h-px w-4 bg-border" />}
             </li>
           );
