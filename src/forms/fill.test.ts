@@ -78,11 +78,30 @@ describe('applyFill', () => {
     expect(res.ok).toBe(false);
   });
 
-  it('refuses to fill file inputs and comboboxes (suggest-only)', () => {
+  it('refuses to fill file inputs', () => {
     const fileRes = applyFill(root('<input type="file" id="cv">'), fill({ selector: '#cv', value: 'x' }));
     expect(fileRes.ok).toBe(false);
-    const cbRes = applyFill(root('<div id="c" role="combobox"></div>'), fill({ selector: '#c', value: 'x' }));
-    expect(cbRes.ok).toBe(false);
+  });
+
+  it('fills an ARIA combobox by clicking the matching option', () => {
+    const r = root(
+      '<div id="c" role="combobox" aria-controls="lb"></div><ul id="lb" role="listbox"><li role="option">Yes</li><li role="option">No</li></ul>',
+    );
+    const yes = r.querySelector('li')!;
+    let clicked = false;
+    yes.addEventListener('click', () => (clicked = true));
+    const res = applyFill(r, fill({ selector: '#c', value: 'Yes' }));
+    expect(res.ok).toBe(true);
+    expect(clicked).toBe(true);
+  });
+
+  it('fails a combobox when no option matches', () => {
+    const r = root('<div id="c" role="combobox" aria-controls="lb"></div><ul id="lb" role="listbox"><li role="option">Maybe</li></ul>');
+    expect(applyFill(r, fill({ selector: '#c', value: 'Yes' })).ok).toBe(false);
+  });
+
+  it('fails a combobox with no resolvable listbox (suggest-only)', () => {
+    expect(applyFill(root('<div id="c" role="combobox"></div>'), fill({ selector: '#c', value: 'x' })).ok).toBe(false);
   });
 });
 

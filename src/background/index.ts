@@ -6,6 +6,7 @@ import { loadProfile } from '@/shared/profile';
 import { makeProvider } from '@/ai/makeProvider';
 import { buildProfileContext } from '@/ai/context';
 import { analyzeJob, generateAnswers, generateCoverLetter } from '@/ai/tasks';
+import { withRetry } from '@/ai/retry';
 import { AIError } from '@/ai/provider';
 import { findReusable, saveAnswer } from '@/reuse/answerBank';
 import type { ErrorCode } from '@/shared/types';
@@ -14,6 +15,25 @@ const AI_TIMEOUT_MS = 30_000;
 
 chrome.runtime.onInstalled.addListener(() => {
   console.info('[ApplyPilot] installed');
+  // Action click opens the popup (default_popup), not the panel.
+  chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
+  chrome.action.setBadgeBackgroundColor({ color: '#4F46E5' }).catch(() => {});
+});
+
+// Keyboard shortcut → open the (window-global) panel. Panel content resets itself
+// per active tab, so there's no stale-data bleed across tabs.
+chrome.commands.onCommand.addListener((command) => {
+  if (command !== 'open-panel') return;
+  void (async () => {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab?.windowId !== undefined) await chrome.sidePanel.open({ windowId: tab.windowId });
+  })();
+});
+
+// Clear the toolbar badge on navigation; the content script re-sets it if the
+// new page is a recognized ATS (see SITE_DETECTED below).
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  if (info.status === 'loading') chrome.action.setBadgeText({ tabId, text: '' }).catch(() => {});
 });
 
 function errorReply(e: unknown): Msg {
@@ -40,7 +60,7 @@ function withTimeout(): { signal: AbortSignal; clear: () => void } {
   return { signal: ctrl.signal, clear: () => clearTimeout(timer) };
 }
 
-chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((raw, sender, sendResponse) => {
   const msg = parseMsg(raw);
   if (!msg) {
     sendResponse({ kind: 'ERROR', code: 'UNKNOWN', detail: 'malformed message' } satisfies Msg);
@@ -52,13 +72,21 @@ chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
       sendResponse({ kind: 'PONG', from: 'background' } satisfies Msg);
       return false;
 
+    case 'SITE_DETECTED': {
+      const tabId = sender.tab?.id;
+      if (tabId !== undefined) chrome.action.setBadgeText({ tabId, text: '●' }).catch(() => {});
+      return false;
+    }
+
     case 'ANALYZE': {
       void (async () => {
         const prep = await prepare();
         if ('error' in prep) return sendResponse(prep.error);
         const t = withTimeout();
         try {
-          const res = await analyzeJob(prep.provider, { jd: msg.jd, profileContext: prep.profileContext, signal: t.signal });
+          const res = await withRetry(() =>
+            analyzeJob(prep.provider, { jd: msg.jd, profileContext: prep.profileContext, signal: t.signal }),
+          );
           sendResponse({ kind: 'ANALYSIS_RESULT', analysis: res.analysis, match: res.match } satisfies Msg);
         } catch (e) {
           sendResponse(errorReply(e));
@@ -90,12 +118,14 @@ chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
           if ('error' in prep) return sendResponse(prep.error);
           const t = withTimeout();
           try {
-            const res = await generateAnswers(prep.provider, {
-              jd: msg.jd,
-              profileContext: prep.profileContext,
-              questions: toAsk,
-              signal: t.signal,
-            });
+            const res = await withRetry(() =>
+              generateAnswers(prep.provider, {
+                jd: msg.jd,
+                profileContext: prep.profileContext,
+                questions: toAsk,
+                signal: t.signal,
+              }),
+            );
             for (const a of res.answers) {
               answers.push({ id: a.id, answer: a.answer, confidence: a.confidence, reused: false });
               const q = toAsk.find((x) => x.id === a.id);
@@ -119,7 +149,9 @@ chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
         if ('error' in prep) return sendResponse(prep.error);
         const t = withTimeout();
         try {
-          const res = await generateCoverLetter(prep.provider, { jd: msg.jd, profileContext: prep.profileContext, signal: t.signal });
+          const res = await withRetry(() =>
+            generateCoverLetter(prep.provider, { jd: msg.jd, profileContext: prep.profileContext, signal: t.signal }),
+          );
           sendResponse({ kind: 'COVER_LETTER_RESULT', coverLetter: res.coverLetter } satisfies Msg);
         } catch (e) {
           sendResponse(errorReply(e));

@@ -72,11 +72,15 @@ function pickYesNo(options: { value: string; label: string }[], want: boolean): 
 }
 
 function mapEligibility(field: FieldDescriptor, profile: CandidateProfile): FieldFill | null {
-  if (!OPTION_TYPES.has(field.controlType) || !field.options) return null;
+  const isCombobox = field.controlType === 'combobox';
+  if (!OPTION_TYPES.has(field.controlType) && !isCombobox) return null;
+  if (!isCombobox && !field.options) return null;
   const label = field.label.toLowerCase();
   for (const rule of ELIGIBILITY_RULES) {
     if (!rule.re.test(label)) continue;
-    const value = pickYesNo(field.options, rule.get(profile));
+    const want = rule.get(profile);
+    // combobox options aren't in the descriptor; emit yes/no — fillCombobox text-matches.
+    const value = isCombobox ? (want ? 'yes' : 'no') : pickYesNo(field.options ?? [], want);
     if (value == null) return null;
     return {
       fieldId: field.id,

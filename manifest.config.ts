@@ -40,6 +40,12 @@ export default defineManifest({
     default_path: 'src/sidepanel/index.html',
   },
   options_page: 'src/options/index.html',
+  commands: {
+    'open-panel': {
+      suggested_key: { default: 'Ctrl+Shift+Y', mac: 'Command+Shift+Y' },
+      description: 'Open the ApplyPilot side panel',
+    },
+  },
   background: {
     service_worker: 'src/background/index.ts',
     type: 'module',
@@ -55,4 +61,7 @@ export default defineManifest({
   permissions: ['storage', 'sidePanel', 'scripting', 'activeTab'],
   host_permissions: GRANTED_HOSTS,
   optional_host_permissions: [...FUTURE_ATS_HOSTS, 'https://*/*'],
+  // Bundled chunks must be loadable on any origin so the content script can be
+  // injected on demand into non-ATS pages (the loader dynamic-imports a chunk).
+  web_accessible_resources: [{ resources: ['assets/*'], matches: ['<all_urls>'] }],
 });

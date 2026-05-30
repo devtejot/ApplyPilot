@@ -92,12 +92,15 @@ const ErrorCodeSchema = z.enum([
 export const MsgSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('PING') }),
   z.object({ kind: z.literal('PONG'), from: z.string() }),
+  z.object({ kind: z.literal('SITE_DETECTED'), site: SiteIdSchema }),
   z.object({ kind: z.literal('DETECT_SITE'), tabId: z.number() }),
   z.object({ kind: z.literal('SITE_RESULT'), site: SiteMatchSchema }),
   z.object({ kind: z.literal('EXTRACT_JD'), tabId: z.number() }),
   z.object({ kind: z.literal('JD_RESULT'), jd: JobDescriptionSchema }),
   z.object({ kind: z.literal('SCAN_FORM'), tabId: z.number() }),
   z.object({ kind: z.literal('FORM_RESULT'), fields: z.array(FieldDescriptorSchema) }),
+  z.object({ kind: z.literal('GET_SELECTION'), tabId: z.number() }),
+  z.object({ kind: z.literal('SELECTION_RESULT'), text: z.string() }),
   z.object({
     kind: z.literal('GENERATE'),
     jd: JobDescriptionSchema,

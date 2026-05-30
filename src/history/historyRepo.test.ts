@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { db, type ApplicationRecord } from '@/shared/db';
-import { saveApplication, findApplicationByUrl, recentApplications, hashText } from './historyRepo';
+import { saveApplication, findApplicationByUrl, recentApplications, hashText, deleteApplication, pruneApplications } from './historyRepo';
 
 function app(p: Partial<ApplicationRecord> & { id: string; jobUrl: string }): ApplicationRecord {
   return {
@@ -43,6 +43,33 @@ describe('historyRepo', () => {
     await saveApplication(app({ id: 'b', jobUrl: 'b', appliedAt: 200 }));
     const all = await recentApplications();
     expect(all.map((r) => r.id)).toEqual(['b', 'a']);
+  });
+
+  it('deletes an application by id', async () => {
+    await saveApplication(app({ id: 'a', jobUrl: 'a' }));
+    await saveApplication(app({ id: 'b', jobUrl: 'b' }));
+    await deleteApplication('a');
+    const all = await recentApplications();
+    expect(all.map((r) => r.id)).toEqual(['b']);
+  });
+});
+
+describe('pruneApplications', () => {
+  const day = 86_400_000;
+
+  it('removes records older than maxAgeDays', async () => {
+    await saveApplication(app({ id: 'old', jobUrl: 'old', appliedAt: Date.now() - 200 * day }));
+    await saveApplication(app({ id: 'new', jobUrl: 'new', appliedAt: Date.now() }));
+    const removed = await pruneApplications({ maxAgeDays: 180, maxCount: 1000 });
+    expect(removed).toBe(1);
+    expect((await recentApplications()).map((r) => r.id)).toEqual(['new']);
+  });
+
+  it('caps to the newest maxCount', async () => {
+    for (let i = 0; i < 5; i++) await saveApplication(app({ id: `r${i}`, jobUrl: `r${i}`, appliedAt: 1000 + i }));
+    const removed = await pruneApplications({ maxAgeDays: 99999, maxCount: 3 });
+    expect(removed).toBe(2);
+    expect((await recentApplications()).map((r) => r.id)).toEqual(['r4', 'r3', 'r2']);
   });
 });
 

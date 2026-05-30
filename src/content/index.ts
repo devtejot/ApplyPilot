@@ -5,11 +5,13 @@ import { detectSite } from '@/detect/detectSite';
 import { greenhouseAdapter } from '@/adapters/greenhouse';
 import { leverAdapter } from '@/adapters/lever';
 import { ashbyAdapter } from '@/adapters/ashby';
+import { genericAdapter } from '@/adapters/generic';
 import { applyFills } from '@/forms/fill';
 import { waitForSelector } from '@/dom/waitForSelector';
 import type { SiteAdapter } from '@/adapters/types';
 
-const ADAPTERS: SiteAdapter[] = [greenhouseAdapter, leverAdapter, ashbyAdapter];
+// Generic is last — specific ATS adapters win on score; generic catches the rest.
+const ADAPTERS: SiteAdapter[] = [greenhouseAdapter, leverAdapter, ashbyAdapter, genericAdapter];
 const RENDER_TIMEOUT_MS = 8000;
 
 console.info('[ApplyPilot] content script active on', location.host);
@@ -17,6 +19,14 @@ console.info('[ApplyPilot] content script active on', location.host);
 function currentAdapter(): SiteAdapter | null {
   const match = detectSite(location.href, document, ADAPTERS);
   return ADAPTERS.find((a) => a.id === match.site) ?? null;
+}
+
+// Tell the background to badge the toolbar icon when this is a recognized ATS.
+{
+  const match = detectSite(location.href, document, ADAPTERS);
+  if (match.site !== 'generic') {
+    chrome.runtime.sendMessage({ kind: 'SITE_DETECTED', site: match.site } satisfies Msg).catch(() => {});
+  }
 }
 
 chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
@@ -30,6 +40,10 @@ chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
 
     case 'DETECT_SITE':
       sendResponse({ kind: 'SITE_RESULT', site: detectSite(location.href, document, ADAPTERS) } satisfies Msg);
+      return false;
+
+    case 'GET_SELECTION':
+      sendResponse({ kind: 'SELECTION_RESULT', text: window.getSelection()?.toString() ?? '' } satisfies Msg);
       return false;
 
     case 'EXTRACT_JD': {

@@ -34,9 +34,7 @@ export function applyFill(root: ParentNode, f: FieldFill): FillResult {
   const role = el.getAttribute('role');
 
   if (type === 'file') return { ok: false, reason: 'file inputs cannot be set programmatically' };
-  if (role === 'combobox' || role === 'listbox') {
-    return { ok: false, reason: 'combobox is suggest-only' };
-  }
+  if (role === 'combobox' || role === 'listbox') return fillCombobox(el, f);
 
   if (tag === 'select') {
     const sel = el as HTMLSelectElement;
@@ -73,6 +71,29 @@ export function applyFill(root: ParentNode, f: FieldFill): FillResult {
   }
 
   return { ok: false, reason: `unsupported control: ${tag}` };
+}
+
+// Best-effort ARIA combobox fill: open it, resolve its listbox, click the option
+// whose text matches. Frameworks vary wildly — if the listbox doesn't resolve
+// synchronously, we report failure so the value shows for manual review instead.
+function fillCombobox(el: Element, f: FieldFill): FillResult {
+  const norm = (s: string) => s.trim().toLowerCase();
+  (el as HTMLElement).click?.();
+
+  const doc = el.ownerDocument;
+  const ownsId = el.getAttribute('aria-controls') || el.getAttribute('aria-owns');
+  const listbox = (ownsId && doc.getElementById(ownsId)) || doc.querySelector('[role="listbox"]');
+  if (!listbox) return { ok: false, reason: 'combobox listbox not found' };
+
+  const want = norm(f.value);
+  const option = [...listbox.querySelectorAll('[role="option"], li, option')].find(
+    (o) => norm(o.textContent ?? '').includes(want) || norm(o.getAttribute('data-value') ?? '') === want,
+  );
+  if (!option) return { ok: false, reason: 'option not found in combobox' };
+
+  (option as HTMLElement).click?.();
+  mark(el, f);
+  return { ok: true };
 }
 
 export function applyFills(

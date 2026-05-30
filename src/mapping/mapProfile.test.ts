@@ -170,6 +170,14 @@ describe("mapField — eligibility dropdowns", () => {
     expect(fill?.value).toBe("yes");
   });
 
+  it("maps eligibility to a combobox (yes/no value, options resolved at fill time)", () => {
+    const fill = mapField(
+      field({ label: "Do you require visa sponsorship?", controlType: "combobox" }),
+      profile,
+    );
+    expect(fill?.value).toBe("no");
+  });
+
   it("returns null for a non-eligibility dropdown", () => {
     expect(
       mapField(field({ label: "How did you hear about us?", controlType: "select", options: yesNo }), profile),

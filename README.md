@@ -91,9 +91,19 @@ npm run test:watch
   file + register. Note: Lever/Ashby selectors are best-effort (Ashby's classes are hashed)
   and may need in-browser tuning; form fill is the robust core.
 
-131 unit tests (Vitest + jsdom; Dexie via fake-indexeddb). Zod v4. Mapping runs in the side
-panel; DOM commands go panel ↔ content directly; the background worker handles AI, the answer
-bank, and holds the key.
+**Generic-page fallback + eligibility dropdowns.**
 
-Next: Workday / LinkedIn adapters (harder — custom comboboxes, multi-step modals), cloud sync
-(Phase 3).
+- Eligibility (work-auth / sponsorship / relocate) now maps to native `<select>` + radio
+  yes/no options, badged review.
+- Generic adapter: works on any career page — readability-style JD extraction (densest text
+  block) + application-form detection + the generic scanner. Reached when no ATS adapter
+  clears the detection threshold.
+- On-demand injection: on a non-ATS page the side panel offers "Enable ApplyPilot on this
+  page" → requests the origin permission (optional) → `chrome.scripting.executeScript`
+  injects the content script → fill works. No broad `<all_urls>` at install.
+- Extension icons; repo initialized.
+
+139 unit tests (Vitest + jsdom; Dexie via fake-indexeddb). Zod v4. Background worker handles
+AI + answer bank + key; DOM commands go panel ↔ content directly.
+
+Next: Workday / LinkedIn adapters + combobox auto-fill (custom dropdowns), cloud sync (Phase 3).
