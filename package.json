@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "package": "npm run build && cd dist && zip -r -FS ../applypilot.zip . -x '.DS_Store' && cd .. && echo 'Wrote applypilot.zip — upload to Edge Add-ons.'"
   },
   "dependencies": {
     "dexie": "^4.0.8",
