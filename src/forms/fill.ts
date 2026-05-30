@@ -1,0 +1,90 @@
+// Fill engine (DESIGN.md §7). Writes values into controls safely, marks each
+// filled field for review, and NEVER touches submit buttons. Refuses file inputs
+// and ARIA comboboxes (suggest-only).
+import type { FieldFill, FillFailure } from '@/shared/types';
+
+export type FillResult = { ok: true } | { ok: false; reason: string };
+
+/**
+ * Set a value the React-safe way: call the native value setter on the prototype
+ * (controlled inputs ignore a plain `el.value =`), then dispatch input + change.
+ */
+export function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+  const proto = el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+  setter?.call(el, value);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+function mark(el: Element, f: FieldFill): void {
+  el.setAttribute('data-applypilot', f.needsReview ? 'review' : 'auto');
+  (el as HTMLElement).style?.setProperty(
+    'outline',
+    f.needsReview ? '2px solid #ca8a04' : '2px solid #16a34a',
+  );
+}
+
+export function applyFill(root: ParentNode, f: FieldFill): FillResult {
+  const el = root.querySelector(f.selector);
+  if (!el) return { ok: false, reason: 'element not found' };
+
+  const tag = el.tagName.toLowerCase();
+  const type = (el.getAttribute('type') || '').toLowerCase();
+  const role = el.getAttribute('role');
+
+  if (type === 'file') return { ok: false, reason: 'file inputs cannot be set programmatically' };
+  if (role === 'combobox' || role === 'listbox') {
+    return { ok: false, reason: 'combobox is suggest-only' };
+  }
+
+  if (tag === 'select') {
+    const sel = el as HTMLSelectElement;
+    if (![...sel.options].some((o) => o.value === f.value)) {
+      return { ok: false, reason: 'option not found' };
+    }
+    sel.value = f.value;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    mark(sel, f);
+    return { ok: true };
+  }
+
+  if (type === 'radio' || type === 'checkbox') {
+    const members = [...root.querySelectorAll(f.selector)] as HTMLInputElement[];
+    const target = members.find((m) => (m.getAttribute('value') ?? '') === f.value);
+    if (!target) return { ok: false, reason: 'option not found' };
+    target.click();
+    mark(target, f);
+    return { ok: true };
+  }
+
+  if (tag === 'input' || tag === 'textarea') {
+    const input = el as HTMLInputElement;
+    const prev = input.value;
+    setNativeValue(input, f.value);
+    const after = input.value;
+    // Accept an exact match OR a non-empty change — widgets (phone, currency)
+    // legitimately reformat the value on input. Only a value that stayed put
+    // (rejected) counts as a failure.
+    const stuck = after === f.value || (after.trim() !== '' && after !== prev);
+    if (!stuck) return { ok: false, reason: 'value did not stick' };
+    mark(input, f);
+    return { ok: true };
+  }
+
+  return { ok: false, reason: `unsupported control: ${tag}` };
+}
+
+export function applyFills(
+  root: ParentNode,
+  fills: FieldFill[],
+): { filled: string[]; failed: FillFailure[] } {
+  const filled: string[] = [];
+  const failed: FillFailure[] = [];
+  for (const f of fills) {
+    const res = applyFill(root, f);
+    if (res.ok) filled.push(f.fieldId);
+    else failed.push({ fieldId: f.fieldId, reason: res.reason });
+  }
+  return { filled, failed };
+}

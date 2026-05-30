@@ -1,0 +1,138 @@
+// Background service worker — the hub. Owns AI calls + the API key (DESIGN.md §1).
+// Also owns the answer bank (reuse), since that's where answers are generated.
+import { parseMsg, type Msg } from '@/shared/messages';
+import { loadSettings, isConfigured } from '@/shared/settings';
+import { loadProfile } from '@/shared/profile';
+import { makeProvider } from '@/ai/makeProvider';
+import { buildProfileContext } from '@/ai/context';
+import { analyzeJob, generateAnswers, generateCoverLetter } from '@/ai/tasks';
+import { AIError } from '@/ai/provider';
+import { findReusable, saveAnswer } from '@/reuse/answerBank';
+import type { ErrorCode } from '@/shared/types';
+
+const AI_TIMEOUT_MS = 30_000;
+
+chrome.runtime.onInstalled.addListener(() => {
+  console.info('[ApplyPilot] installed');
+});
+
+function errorReply(e: unknown): Msg {
+  const code: ErrorCode = e instanceof AIError ? e.code : 'UNKNOWN';
+  return { kind: 'ERROR', code, detail: e instanceof Error ? e.message : String(e) };
+}
+
+// Provider + profile context, or an ERROR Msg explaining what's missing.
+async function prepare() {
+  const settings = await loadSettings();
+  if (!isConfigured(settings)) {
+    return { error: { kind: 'ERROR', code: 'INVALID_KEY', detail: 'Add your API key in settings.' } as Msg };
+  }
+  const profile = await loadProfile();
+  if (!profile) {
+    return { error: { kind: 'ERROR', code: 'UNKNOWN', detail: 'Set up your profile first.' } as Msg };
+  }
+  return { provider: makeProvider(settings), profileContext: buildProfileContext(profile) };
+}
+
+function withTimeout(): { signal: AbortSignal; clear: () => void } {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), AI_TIMEOUT_MS);
+  return { signal: ctrl.signal, clear: () => clearTimeout(timer) };
+}
+
+chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
+  const msg = parseMsg(raw);
+  if (!msg) {
+    sendResponse({ kind: 'ERROR', code: 'UNKNOWN', detail: 'malformed message' } satisfies Msg);
+    return false;
+  }
+
+  switch (msg.kind) {
+    case 'PING':
+      sendResponse({ kind: 'PONG', from: 'background' } satisfies Msg);
+      return false;
+
+    case 'ANALYZE': {
+      void (async () => {
+        const prep = await prepare();
+        if ('error' in prep) return sendResponse(prep.error);
+        const t = withTimeout();
+        try {
+          const res = await analyzeJob(prep.provider, { jd: msg.jd, profileContext: prep.profileContext, signal: t.signal });
+          sendResponse({ kind: 'ANALYSIS_RESULT', analysis: res.analysis, match: res.match } satisfies Msg);
+        } catch (e) {
+          sendResponse(errorReply(e));
+        } finally {
+          t.clear();
+        }
+      })();
+      return true;
+    }
+
+    case 'GENERATE_ANSWERS': {
+      void (async () => {
+        const company = msg.jd.company;
+        const answers: { id: string; answer: string; confidence: number; reused: boolean }[] = [];
+        const toAsk: typeof msg.questions = [];
+
+        // Reuse first (no key needed) — only the misses go to the model.
+        for (const q of msg.questions) {
+          const reuse = await findReusable(q.text, company);
+          if (reuse) {
+            answers.push({ id: q.id, answer: reuse.record.answer, confidence: reuse.score, reused: true });
+          } else {
+            toAsk.push(q);
+          }
+        }
+
+        if (toAsk.length > 0) {
+          const prep = await prepare();
+          if ('error' in prep) return sendResponse(prep.error);
+          const t = withTimeout();
+          try {
+            const res = await generateAnswers(prep.provider, {
+              jd: msg.jd,
+              profileContext: prep.profileContext,
+              questions: toAsk,
+              signal: t.signal,
+            });
+            for (const a of res.answers) {
+              answers.push({ id: a.id, answer: a.answer, confidence: a.confidence, reused: false });
+              const q = toAsk.find((x) => x.id === a.id);
+              if (q) await saveAnswer(q.text, a.answer, company);
+            }
+          } catch (e) {
+            return sendResponse(errorReply(e));
+          } finally {
+            t.clear();
+          }
+        }
+
+        sendResponse({ kind: 'ANSWERS_RESULT', answers } satisfies Msg);
+      })();
+      return true;
+    }
+
+    case 'GENERATE_COVER_LETTER': {
+      void (async () => {
+        const prep = await prepare();
+        if ('error' in prep) return sendResponse(prep.error);
+        const t = withTimeout();
+        try {
+          const res = await generateCoverLetter(prep.provider, { jd: msg.jd, profileContext: prep.profileContext, signal: t.signal });
+          sendResponse({ kind: 'COVER_LETTER_RESULT', coverLetter: res.coverLetter } satisfies Msg);
+        } catch (e) {
+          sendResponse(errorReply(e));
+        } finally {
+          t.clear();
+        }
+      })();
+      return true;
+    }
+
+    default:
+      return false;
+  }
+});
+
+export {};
