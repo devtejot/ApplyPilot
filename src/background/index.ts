@@ -13,11 +13,15 @@ import type { ErrorCode } from '@/shared/types';
 
 const AI_TIMEOUT_MS = 30_000;
 
-chrome.runtime.onInstalled.addListener(() => {
+chrome.runtime.onInstalled.addListener((details) => {
   console.info('[ApplyPilot] installed');
   // Action click opens the popup (default_popup), not the panel.
   chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
   chrome.action.setBadgeBackgroundColor({ color: '#4F46E5' }).catch(() => {});
+  // First install → open the onboarding wizard in a tab (not on update/reload).
+  if (details.reason === 'install') {
+    chrome.tabs.create({ url: chrome.runtime.getURL('src/onboarding/index.html') }).catch(() => {});
+  }
 });
 
 // Keyboard shortcut → open the (window-global) panel. Panel content resets itself

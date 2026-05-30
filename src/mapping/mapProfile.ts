@@ -1,9 +1,13 @@
 // Tier-1 deterministic mapping (DESIGN.md §7): label keyword -> canonical profile
 // value. No AI. Confidence is driven by how trustworthy the label source is.
+// Locale (profile country) shapes phone formatting. Sensitive/eligibility/
+// demographic answers always need review.
 import type { CandidateProfile, ControlType, FieldDescriptor, FieldFill } from '@/shared/types';
 import { normalizePhone, normalizeUrl } from './format';
 
-const TIER1_TYPES = new Set<ControlType>(['text', 'email', 'tel', 'url', 'textarea']);
+// Text-like controls the rules below can fill. number/date included for salary,
+// years-of-experience, start date, DOB, postal, graduation year, etc.
+const TIER1_TYPES = new Set<ControlType>(['text', 'email', 'tel', 'url', 'textarea', 'number', 'date']);
 
 const SOURCE_WEIGHT: Record<string, number> = {
   'label-for': 1,
@@ -23,17 +27,66 @@ interface Rule {
   get: (p: CandidateProfile) => string | undefined;
 }
 
-// Order = priority; first matching rule wins. first/last must precede full name.
+const currentJob = (p: CandidateProfile) => p.workHistory[0];
+const latestEdu = (p: CandidateProfile) => p.education[0];
+const list = (xs?: string[]) => (xs && xs.length ? xs.join(', ') : undefined);
+
+// Order = priority; first matching rule wins. Specific labels precede generic.
 const RULES: Rule[] = [
+  // Contact + links
   { re: /\be-?mail\b/, get: (p) => p.personal.email },
-  { re: /\b(phone|mobile|telephone|cell)\b/, get: (p) => normalizePhone(p.personal.phone) },
+  { re: /\b(phone|mobile|telephone|cell)\b/, get: (p) => normalizePhone(p.personal.phone, p.personal.location.country) },
   { re: /linkedin/, get: (p) => maybeUrl(p.personal.links.linkedin) },
   { re: /github/, get: (p) => maybeUrl(p.personal.links.github) },
+  { re: /\b(twitter|x handle)\b/, get: (p) => maybeUrl(p.personal.links.twitter) },
   { re: /\b(portfolio|website|personal site)\b/, get: (p) => maybeUrl(p.personal.links.portfolio) },
+
+  // Names
+  { re: /\b(preferred name|nick ?name|known as)\b/, get: (p) => p.personal.preferredName },
+  { re: /\bmiddle name\b/, get: (p) => p.personal.middleName },
   { re: /\b(first ?name|given name|fname|forename)\b/, get: (p) => p.personal.firstName },
   { re: /\b(last ?name|surname|family name|lname)\b/, get: (p) => p.personal.lastName },
-  { re: /\b(full name|your name)\b/, get: (p) => fullName(p) },
+  { re: /\b(full name|your name|legal name|candidate name)\b/, get: (p) => fullName(p) },
+  { re: /\bpronouns?\b/, get: (p) => p.personal.pronouns },
+  { re: /\b(date of birth|d\.?o\.?b\.?|birth ?date)\b/, get: (p) => p.personal.dateOfBirth },
+
+  // Address (line-2 guard first so it isn't filled with line 1)
+  { re: /(address|street)\s*(line\s*)?2\b|line\s*2\b/, get: () => undefined },
+  { re: /\b(street address|address line 1|street|mailing address)\b/, get: (p) => p.personal.location.line1 },
   { re: /\b(city|town)\b/, get: (p) => p.personal.location.city },
+  { re: /\b(state|province|region)\b(?!.*code)/, get: (p) => p.personal.location.state },
+  { re: /\b(country|country of residence)\b(?!.*code)/, get: (p) => p.personal.location.country },
+  { re: /\b(zip|postal|pin ?code|post ?code)\b/, get: (p) => p.personal.location.postalCode },
+  { re: /\baddress\b/, get: (p) => p.personal.location.line1 },
+
+  // Current employment (from latest work item)
+  { re: /\b(current|present)\s+(employer|company|organi[sz]ation)\b/, get: (p) => currentJob(p)?.company },
+  { re: /\b(current|present)\s+(title|role|designation|position|job title)\b/, get: (p) => currentJob(p)?.title },
+
+  // Compensation (current/expected, CTC synonyms)
+  { re: /\b(current|present)\s+(ctc|salary|compensation|pay)\b/, get: (p) => p.eligibility.currentSalary },
+  {
+    re: /\b(expected|desired)\s+(ctc|salary|compensation|pay)\b|salary expectation|compensation expectation/,
+    get: (p) => p.eligibility.expectedSalary ?? p.eligibility.desiredSalary,
+  },
+
+  // Availability / experience (notice period before generic "notice"/start)
+  { re: /\bnotice period\b/, get: (p) => p.eligibility.noticePeriod },
+  { re: /\b(years?\s+of\s+experience|total\s+experience|years?\s+exp\b|yrs?\s+exp)\b/, get: (p) => p.eligibility.yearsExperience },
+  { re: /\b(available start|start date|availability|date of joining|joining date|earliest start|available to start)\b/, get: (p) => p.eligibility.availableStartDate },
+
+  // Identity / work auth
+  { re: /\b(citizenship|citizen of|nationality)\b/, get: (p) => p.eligibility.citizenship },
+
+  // Education (latest)
+  { re: /\b(university|college|school|alma mater|institution)\b/, get: (p) => latestEdu(p)?.school },
+  { re: /\b(degree|qualification|highest education)\b/, get: (p) => latestEdu(p)?.degree },
+  { re: /\b(field of study|major|specialization)\b/, get: (p) => latestEdu(p)?.field },
+  { re: /\b(graduation|grad(uation)? year|year of passing|passing year|completion year)\b/, get: (p) => latestEdu(p)?.endDate },
+
+  // Misc
+  { re: /\blanguages?\b/, get: (p) => list(p.personal.languages) },
+  { re: /\b(referral source|source of application|how did you find)\b/, get: (p) => p.howHeard },
 ];
 
 function maybeUrl(raw?: string): string | undefined {
@@ -54,21 +107,53 @@ function isFreeform(label: string): boolean {
   return l.endsWith('?') || l.length > FREEFORM_MAX_LEN;
 }
 
-// Option-based eligibility fields (yes/no dropdowns + radios). DESIGN.md §4 §7.
+// Option-based fields (yes/no dropdowns + radios + comboboxes). DESIGN.md §4 §7.
 const OPTION_TYPES = new Set<ControlType>(['select', 'radio']);
 const YES = /^\s*(yes|y|true)\b/i;
 const NO = /^\s*(no|n|false)\b/i;
+const DECLINE = /decline|prefer not|don'?t wish|do not wish|not to (say|answer|disclose|identify)|rather not|no answer/i;
 
 const ELIGIBILITY_RULES: { re: RegExp; get: (p: CandidateProfile) => boolean }[] = [
   { re: /sponsor|visa/, get: (p) => p.eligibility.requiresSponsorship },
-  { re: /authoriz|eligible to work|legally|right to work/, get: (p) => p.eligibility.workAuthorized },
+  { re: /authoriz|eligible to work|legally|right to work|work permit/, get: (p) => p.eligibility.workAuthorized },
   { re: /relocat/, get: (p) => p.eligibility.willingToRelocate },
+];
+
+// Self-identification fields → user value, else a "decline" option. Never invented.
+const DEMOGRAPHIC_RULES: { re: RegExp; get: (p: CandidateProfile) => string | undefined }[] = [
+  { re: /\b(gender|sex)\b/, get: (p) => p.demographics?.gender },
+  { re: /race|ethnic/, get: (p) => p.demographics?.raceEthnicity },
+  { re: /veteran|military/, get: (p) => p.demographics?.veteranStatus },
+  { re: /disab/, get: (p) => p.demographics?.disabilityStatus },
 ];
 
 function pickYesNo(options: { value: string; label: string }[], want: boolean): string | null {
   const re = want ? YES : NO;
   const opt = options.find((o) => re.test(o.label) || re.test(o.value));
   return opt ? opt.value : null;
+}
+
+function pickByText(options: { value: string; label: string }[], want: string): string | null {
+  const w = want.trim().toLowerCase();
+  if (!w) return null;
+  const opt = options.find((o) => o.label.toLowerCase().includes(w) || o.value.toLowerCase() === w);
+  return opt ? opt.value : null;
+}
+
+function pickDecline(options: { value: string; label: string }[]): string | null {
+  const opt = options.find((o) => DECLINE.test(o.label) || DECLINE.test(o.value));
+  return opt ? opt.value : null;
+}
+
+function optionFill(field: FieldDescriptor, value: string): FieldFill {
+  return {
+    fieldId: field.id,
+    selector: field.selector,
+    value,
+    confidence: SOURCE_WEIGHT[field.labelSource] ?? 0.5,
+    source: 'deterministic',
+    needsReview: true, // eligibility + demographics are sensitive — always confirm
+  };
 }
 
 function mapEligibility(field: FieldDescriptor, profile: CandidateProfile): FieldFill | null {
@@ -82,14 +167,28 @@ function mapEligibility(field: FieldDescriptor, profile: CandidateProfile): Fiel
     // combobox options aren't in the descriptor; emit yes/no — fillCombobox text-matches.
     const value = isCombobox ? (want ? 'yes' : 'no') : pickYesNo(field.options ?? [], want);
     if (value == null) return null;
-    return {
-      fieldId: field.id,
-      selector: field.selector,
-      value,
-      confidence: SOURCE_WEIGHT[field.labelSource] ?? 0.5,
-      source: 'deterministic',
-      needsReview: true, // eligibility is sensitive — always confirm
-    };
+    return optionFill(field, value);
+  }
+  return null;
+}
+
+function mapDemographics(field: FieldDescriptor, profile: CandidateProfile): FieldFill | null {
+  const isCombobox = field.controlType === 'combobox';
+  if (!OPTION_TYPES.has(field.controlType) && !isCombobox) return null;
+  if (!isCombobox && !field.options) return null;
+  const label = field.label.toLowerCase();
+  for (const rule of DEMOGRAPHIC_RULES) {
+    if (!rule.re.test(label)) continue;
+    const userVal = rule.get(profile);
+    let value: string | null;
+    if (isCombobox) {
+      value = userVal && userVal.trim() ? userVal : 'Decline to self-identify';
+    } else {
+      const opts = field.options ?? [];
+      value = (userVal && pickByText(opts, userVal)) || pickDecline(opts);
+    }
+    if (value == null) return null;
+    return optionFill(field, value);
   }
   return null;
 }
@@ -116,14 +215,9 @@ function mapText(field: FieldDescriptor, profile: CandidateProfile): FieldFill |
 
 export function mapField(field: FieldDescriptor, profile: CandidateProfile): FieldFill | null {
   if (TIER1_TYPES.has(field.controlType)) return mapText(field, profile);
-  return mapEligibility(field, profile);
+  return mapEligibility(field, profile) ?? mapDemographics(field, profile);
 }
 
-export function mapDeterministic(
-  fields: FieldDescriptor[],
-  profile: CandidateProfile,
-): FieldFill[] {
-  return fields
-    .map((f) => mapField(f, profile))
-    .filter((f): f is FieldFill => f !== null);
+export function mapDeterministic(fields: FieldDescriptor[], profile: CandidateProfile): FieldFill[] {
+  return fields.map((f) => mapField(f, profile)).filter((f): f is FieldFill => f !== null);
 }

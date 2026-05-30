@@ -1,6 +1,11 @@
 // Popup = launcher + status only (DESIGN.md §1). Heavy UI lives in the side panel,
 // which stays open while the user interacts with the page form.
+import { ArrowRight, Settings } from 'lucide-react';
+import { Button, ThemeToggle, useTheme } from '@/ui';
+
 export function App() {
+  useTheme();
+
   async function openPanel() {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab?.windowId !== undefined) {
@@ -10,27 +15,28 @@ export function App() {
   }
 
   return (
-    <div className="flex flex-col gap-3 p-4 text-neutral-900">
-      <div>
-        <h1 className="text-base font-semibold">ApplyPilot</h1>
-        <p className="text-xs text-neutral-500">AI-assisted autofill</p>
+    <div className="flex flex-col gap-3 bg-bg p-4 text-fg">
+      <div className="flex items-start justify-between gap-2">
+        <div>
+          <h1 className="text-base font-semibold">ApplyPilot</h1>
+          <p className="text-xs text-fg-muted">AI-assisted autofill</p>
+        </div>
+        <ThemeToggle />
       </div>
 
-      <button
-        onClick={openPanel}
-        className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-700"
-      >
-        Open Side Panel →
-      </button>
+      <Button onClick={openPanel} iconRight={<ArrowRight className="h-4 w-4" />} className="w-full">
+        Open side panel
+      </Button>
 
-      <button
+      <Button
+        variant="ghost"
+        size="sm"
         onClick={() => chrome.runtime.openOptionsPage()}
-        className="text-left text-sm font-medium text-blue-600 hover:underline"
+        iconLeft={<Settings className="h-3.5 w-3.5" />}
+        className="self-start"
       >
-        Edit profile →
-      </button>
-
-      <p className="text-[11px] text-neutral-400">Slice 2</p>
+        Edit profile
+      </Button>
     </div>
   );
 }

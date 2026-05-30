@@ -3,6 +3,7 @@
 import { z } from 'zod';
 
 export type Provider = 'claude' | 'gemini';
+export type ThemePref = 'light' | 'dark' | 'system';
 
 export const CLAUDE_MODELS = ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'] as const;
 export const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-2.5-flash-lite', 'gemini-2.5-pro'] as const;
@@ -11,6 +12,11 @@ export const settingsSchema = z.object({
   provider: z.enum(['claude', 'gemini']),
   apiKey: z.string(),
   model: z.string(),
+  // UI theme preference. `.default` keeps legacy stored settings (which lack this
+  // field) valid — safeParse fills it in.
+  theme: z.enum(['light', 'dark', 'system']).default('system'),
+  // First-run flag — set true when the user finishes (or skips) onboarding.
+  onboardingComplete: z.boolean().default(false),
 });
 
 export type Settings = z.infer<typeof settingsSchema>;
@@ -26,7 +32,7 @@ export function modelsFor(provider: Provider): readonly string[] {
 }
 
 export function defaultSettings(): Settings {
-  return { provider: 'gemini', apiKey: '', model: defaultModelFor('gemini') };
+  return { provider: 'gemini', apiKey: '', model: defaultModelFor('gemini'), theme: 'system', onboardingComplete: false };
 }
 
 export function isConfigured(s: Settings): boolean {

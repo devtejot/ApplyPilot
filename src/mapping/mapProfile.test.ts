@@ -185,6 +185,114 @@ describe("mapField — eligibility dropdowns", () => {
   });
 });
 
+const rich: CandidateProfile = {
+  ...profile,
+  personal: {
+    ...profile.personal,
+    middleName: "Kumar",
+    preferredName: "DJ",
+    pronouns: "he/him",
+    dateOfBirth: "1995-04-12",
+    languages: ["English", "Hindi"],
+    location: { line1: "12 MG Road", city: "Bengaluru", state: "Karnataka", country: "India", postalCode: "560001" },
+    links: { ...profile.personal.links, twitter: "x.com/dj" },
+  },
+  eligibility: {
+    ...profile.eligibility,
+    currentSalary: "18 LPA",
+    expectedSalary: "26 LPA",
+    noticePeriod: "30 days",
+    availableStartDate: "2026-07-01",
+    yearsExperience: "7",
+    citizenship: "Indian",
+  },
+  demographics: { gender: "Female", veteranStatus: "I am not a veteran" },
+  howHeard: "Referral",
+  workHistory: [{ company: "Globex", title: "Staff Engineer", startDate: "2021-03", endDate: "present", bullets: [] }],
+  education: [{ school: "IIT Bombay", degree: "B.Tech", field: "Computer Science", endDate: "2017" }],
+};
+
+describe("mapField — expanded coverage", () => {
+  const v = (label: string, p = rich, controlType: FieldDescriptor["controlType"] = "text") =>
+    mapField(field({ label, controlType }), p)?.value;
+
+  it("maps address parts and guards address line 2", () => {
+    expect(v("Address Line 1")).toBe("12 MG Road");
+    expect(v("Address line 2")).toBeUndefined(); // guarded → null
+    expect(v("City")).toBe("Bengaluru");
+    expect(v("State / Province")).toBe("Karnataka");
+    expect(v("Country")).toBe("India");
+    expect(v("PIN code")).toBe("560001");
+  });
+
+  it("maps current employer and title from the latest role", () => {
+    expect(v("Current Employer")).toBe("Globex");
+    expect(v("Current Title")).toBe("Staff Engineer");
+  });
+
+  it("maps current and expected compensation (CTC synonyms)", () => {
+    expect(v("Current CTC")).toBe("18 LPA");
+    expect(v("Expected CTC")).toBe("26 LPA");
+    expect(v("Desired Salary")).toBe("26 LPA");
+  });
+
+  it("maps availability and experience", () => {
+    expect(v("Notice Period")).toBe("30 days");
+    expect(v("Years of experience")).toBe("7");
+    expect(v("Available start date")).toBe("2026-07-01");
+  });
+
+  it("maps identity fields", () => {
+    expect(v("Preferred name")).toBe("DJ");
+    expect(v("Middle name")).toBe("Kumar");
+    expect(v("Pronouns")).toBe("he/him");
+    expect(v("Citizenship")).toBe("Indian");
+    expect(v("Date of birth")).toBe("1995-04-12");
+  });
+
+  it("maps education and misc fields", () => {
+    expect(v("University")).toBe("IIT Bombay");
+    expect(v("Degree")).toBe("B.Tech");
+    expect(v("Languages")).toBe("English, Hindi");
+    expect(v("Twitter")).toBe("https://x.com/dj");
+  });
+
+  it("prepends the India dial code when filling phone for an India profile", () => {
+    const india = { ...rich, personal: { ...rich.personal, phone: "98765 43210" } };
+    expect(mapField(field({ label: "Mobile", controlType: "tel" }), india)!.value).toBe("+919876543210");
+  });
+});
+
+describe("mapField — demographics (decline default)", () => {
+  const gender = [
+    { value: "", label: "Select…" },
+    { value: "m", label: "Male" },
+    { value: "f", label: "Female" },
+    { value: "nb", label: "Non-binary" },
+    { value: "decline", label: "I prefer not to say" },
+  ];
+  const race = [
+    { value: "asian", label: "Asian" },
+    { value: "white", label: "White" },
+    { value: "decline", label: "Decline to self-identify" },
+  ];
+
+  it("uses the user's value when set", () => {
+    const fill = mapField(field({ label: "Gender", controlType: "select", options: gender }), rich);
+    expect(fill).toMatchObject({ value: "f", needsReview: true });
+  });
+
+  it("auto-selects the decline option when the user left it blank", () => {
+    const fill = mapField(field({ label: "Race / Ethnicity", controlType: "select", options: race }), rich);
+    expect(fill?.value).toBe("decline");
+  });
+
+  it("emits a decline string for a demographic combobox", () => {
+    const fill = mapField(field({ label: "Disability status", controlType: "combobox" }), rich);
+    expect(fill?.value).toBe("Decline to self-identify");
+  });
+});
+
 describe("mapDeterministic — batch", () => {
   it("returns one fill per matched field and skips the rest", () => {
     const fields = [

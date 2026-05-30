@@ -1,7 +1,4 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
-
+/* Tailwind + tokens come from ../ui/theme.css (imported first in main.tsx). */
 body {
   margin: 0;
   width: 20rem;

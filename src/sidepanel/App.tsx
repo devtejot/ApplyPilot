@@ -1,4 +1,17 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  ArrowRight,
+  Check,
+  Copy,
+  CornerDownLeft,
+  FileText,
+  Pencil,
+  RefreshCw,
+  Sparkles,
+  Trash2,
+  Wand2,
+} from 'lucide-react';
 import { usePanelStore } from './store';
 import { parseMsg, type Msg } from '@/shared/messages';
 import { mapDeterministic } from '@/mapping/mapProfile';
@@ -16,6 +29,19 @@ import {
 } from '@/history/historyRepo';
 import { saveAnswer } from '@/reuse/answerBank';
 import { ProfileEditor } from '@/profile/ProfileEditor';
+import {
+  Badge,
+  Button,
+  Card,
+  Dialog,
+  IconButton,
+  ProgressSteps,
+  Skeleton,
+  Textarea,
+  ThemeToggle,
+  useTheme,
+  useToast,
+} from '@/ui';
 import type { ApplicationRecord } from '@/shared/db';
 import type { FieldDescriptor, FieldFill, JobDescription, SiteMatch } from '@/shared/types';
 import type { JobAnalysis, MatchScore } from '@/ai/contracts';
@@ -41,7 +67,26 @@ async function sendToBackground(msg: Msg): Promise<Msg | null> {
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+const FILL_STEPS = ['Detect', 'Job', 'Scan', 'Fill', 'Done'];
+function fillStep(status: string): number {
+  switch (status) {
+    case 'extracting':
+      return 1;
+    case 'analyzed':
+    case 'generating':
+      return 2;
+    case 'filled':
+      return 3;
+    case 'done':
+      return 4;
+    default:
+      return 0;
+  }
+}
+
 export function App() {
+  useTheme();
+  const { toast } = useToast();
   const { status, setStatus, setError, error, reset } = usePanelStore();
   const [site, setSite] = useState<SiteMatch | null>(null);
   const [profileName, setProfileName] = useState<string | null>(null);
@@ -64,7 +109,13 @@ export function App() {
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [onOwnPage, setOnOwnPage] = useState(false);
   const [view, setView] = useState<'main' | 'profile'>('main');
+  const [pendingDelete, setPendingDelete] = useState<ApplicationRecord | null>(null);
   const lastKeyRef = useRef<string>('');
+
+  // Surface store errors as toasts (replaces the old inline error card).
+  useEffect(() => {
+    if (error) toast(error.detail, 'error');
+  }, [error, toast]);
 
   // Clear everything tied to a specific page (run when the tab/URL changes).
   function resetPageState() {
@@ -277,6 +328,7 @@ export function App() {
   async function generateAiAnswers() {
     if (!jd || aiQuestions.length === 0) return;
     setAiBusy('answers');
+    setStatus('generating');
     const tabId = await activeTabId();
     const res = await sendToBackground({ kind: 'GENERATE_ANSWERS', jd, questions: aiQuestions });
     if (res?.kind === 'ANSWERS_RESULT' && tabId) {
@@ -306,17 +358,20 @@ export function App() {
         await upsertHistory(jd, site, { generatedAnswers });
       }
     } else if (res?.kind === 'ERROR') setError(res.code, res.detail);
+    setStatus('done');
     setAiBusy(null);
   }
 
   async function makeCoverLetter() {
     if (!jd) return;
     setAiBusy('cover');
+    setStatus('generating');
     const res = await sendToBackground({ kind: 'GENERATE_COVER_LETTER', jd });
     if (res?.kind === 'COVER_LETTER_RESULT') {
       setCoverLetter(res.coverLetter);
       if (site) await upsertHistory(jd, site, { coverLetter: res.coverLetter });
     } else if (res?.kind === 'ERROR') setError(res.code, res.detail);
+    setStatus('done');
     setAiBusy(null);
   }
 
@@ -359,6 +414,14 @@ export function App() {
     if (tabId) await sendToTab(tabId, { kind: 'FILL', tabId, map: [{ ...f, value: text, needsReview: true }] });
     await saveAnswer(labelFor(f.fieldId), text, jd?.company);
     setFills((prev) => prev.map((x) => (x.fieldId === f.fieldId ? { ...x, value: text } : x)));
+    toast('Saved — ApplyPilot will reuse this next time.', 'success');
+  }
+
+  async function confirmDelete() {
+    if (!pendingDelete) return;
+    await deleteApplication(pendingDelete.id);
+    setHistory(await recentApplications(8));
+    setPendingDelete(null);
   }
 
   const labelFor = (id: string) => fields.find((f) => f.id === id)?.label ?? id;
@@ -367,85 +430,124 @@ export function App() {
 
   if (view === 'profile') {
     return (
-      <div className="h-full overflow-y-auto bg-neutral-50 p-4">
+      <div className="h-full overflow-y-auto bg-surface-muted p-4">
         <ProfileEditor onClose={() => setView('main')} onSaved={() => setView('main')} />
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col gap-3 overflow-y-auto bg-neutral-50 p-4 text-neutral-900">
-      <header>
-        <h1 className="text-lg font-semibold">ApplyPilot</h1>
-        <p className="text-xs text-neutral-500">AI-assisted autofill · never auto-submits</p>
+    <div className="flex h-full flex-col gap-3 overflow-y-auto bg-bg p-4 text-fg">
+      <header className="flex items-start justify-between gap-2">
+        <div>
+          <h1 className="text-lg font-semibold">ApplyPilot</h1>
+          <p className="text-xs text-fg-muted">AI-assisted autofill · never auto-submits</p>
+        </div>
+        <ThemeToggle />
       </header>
 
-      <Card label="Page">
+      <Card
+        label="Page"
+        action={
+          <IconButton label="Rescan" onClick={detect}>
+            <RefreshCw className="h-3.5 w-3.5" />
+          </IconButton>
+        }
+      >
         {site ? (
           <div className="flex items-center justify-between">
             <span className="font-medium capitalize">{site.site}</span>
-            <span className="text-xs text-neutral-500">{Math.round(site.confidence * 100)}%</span>
+            <span className="text-xs text-fg-muted">{Math.round(site.confidence * 100)}%</span>
           </div>
         ) : onOwnPage ? (
-          <span className="text-sm text-neutral-500">ApplyPilot settings open here — switch to a job page to fill.</span>
+          <span className="text-sm text-fg-muted">ApplyPilot settings open here — switch to a job page to fill.</span>
         ) : needsEnable ? (
-          <div>
-            <span className="text-sm text-neutral-500">Not a recognized ATS.</span>
-            <button onClick={enableOnPage} className="mt-1 block text-sm font-medium text-blue-600 hover:underline">
-              Enable ApplyPilot on this page →
-            </button>
+          <div className="flex flex-col items-start gap-1.5">
+            <span className="text-sm text-fg-muted">Not a recognized ATS.</span>
+            <Button variant="secondary" size="sm" onClick={enableOnPage} iconRight={<ArrowRight className="h-3.5 w-3.5" />}>
+              Enable ApplyPilot here
+            </Button>
           </div>
         ) : (
-          <span className="text-sm text-neutral-500">{status === 'detecting' ? 'detecting…' : 'no page detected'}</span>
+          <span className="text-sm text-fg-muted">{status === 'detecting' ? 'detecting…' : 'no page detected'}</span>
         )}
-        <button onClick={detect} className="mt-1 text-[11px] text-neutral-400 hover:underline">Rescan</button>
         {priorApp && (
-          <p className="mt-1 text-xs text-amber-700">
-            Drafted before on {new Date(priorApp.appliedAt).toLocaleDateString()}.
-          </p>
+          <p className="mt-1.5 text-xs text-warning">Drafted before on {new Date(priorApp.appliedAt).toLocaleDateString()}.</p>
         )}
       </Card>
 
-      <Card label="Profile">
-        {profileComplete ? (
-          <div className="flex items-center justify-between">
-            <span className="font-medium">{profileName}</span>
-            <button onClick={() => setView('profile')} className="text-xs font-medium text-blue-600 hover:underline">Edit</button>
-          </div>
-        ) : (
-          <button onClick={() => setView('profile')} className="text-sm font-medium text-blue-600 hover:underline">
-            {profileName ? 'Finish profile setup →' : 'Set up your profile →'}
-          </button>
-        )}
-      </Card>
-
-      <button
-        onClick={fillApplication}
-        disabled={!canFill}
-        className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white enabled:hover:bg-neutral-700 disabled:opacity-40"
+      <Card
+        label="Profile"
+        action={
+          profileComplete ? (
+            <Button variant="ghost" size="sm" onClick={() => setView('profile')} iconRight={<Pencil className="h-3 w-3" />}>
+              Edit
+            </Button>
+          ) : undefined
+        }
       >
-        {busy ? 'Filling…' : 'Fill Application'}
-      </button>
+        {profileComplete ? (
+          <span className="text-sm font-medium">{profileName}</span>
+        ) : (
+          <Button variant="secondary" size="sm" onClick={() => setView('profile')} iconRight={<ArrowRight className="h-3.5 w-3.5" />}>
+            {profileName ? 'Finish profile setup' : 'Set up your profile'}
+          </Button>
+        )}
+      </Card>
+
+      <div className="flex flex-col gap-2">
+        <Button onClick={fillApplication} disabled={!canFill} loading={busy} className="w-full">
+          {busy ? 'Filling…' : 'Fill Application'}
+        </Button>
+        {busy && <ProgressSteps steps={FILL_STEPS} current={fillStep(status)} />}
+      </div>
 
       {jd && (
         <Card label="Job">
           <div className="font-medium">{jd.title || 'Untitled role'}</div>
-          {jd.company && <div className="text-xs text-neutral-500">{jd.company}</div>}
-          <button onClick={useSelectionAsJd} className="mt-0.5 text-[11px] text-neutral-400 hover:underline">
+          {jd.company && <div className="text-xs text-fg-muted">{jd.company}</div>}
+          <button onClick={useSelectionAsJd} className="mt-1 text-[11px] text-fg-subtle hover:text-fg hover:underline">
             JD wrong? Select text on the page → use it
           </button>
           {!aiConfigured && (
-            <button onClick={() => setView('profile')} className="mt-2 block text-xs font-medium text-blue-600 hover:underline">
-              Add an API key to enable AI →
-            </button>
+            <Button variant="ghost" size="sm" onClick={() => setView('profile')} className="mt-2" iconRight={<ArrowRight className="h-3.5 w-3.5" />}>
+              Add an API key to enable AI
+            </Button>
           )}
           {aiConfigured && (
             <div className="mt-2 flex flex-wrap gap-2">
-              <Pill onClick={analyzeFit} disabled={aiBusy !== null} label={aiBusy === 'analyze' ? 'Analyzing…' : 'Analyze fit'} />
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={analyzeFit}
+                disabled={aiBusy !== null}
+                loading={aiBusy === 'analyze'}
+                iconLeft={<Sparkles className="h-3.5 w-3.5" />}
+              >
+                {aiBusy === 'analyze' ? 'Analyzing…' : 'Analyze fit'}
+              </Button>
               {aiQuestions.length > 0 && (
-                <Pill onClick={generateAiAnswers} disabled={aiBusy !== null} label={aiBusy === 'answers' ? 'Writing…' : `Generate ${aiQuestions.length} answer${aiQuestions.length === 1 ? '' : 's'}`} />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={generateAiAnswers}
+                  disabled={aiBusy !== null}
+                  loading={aiBusy === 'answers'}
+                  iconLeft={<Wand2 className="h-3.5 w-3.5" />}
+                >
+                  {aiBusy === 'answers' ? 'Writing…' : `Generate ${aiQuestions.length} answer${aiQuestions.length === 1 ? '' : 's'}`}
+                </Button>
               )}
-              <Pill onClick={makeCoverLetter} disabled={aiBusy !== null} label={aiBusy === 'cover' ? 'Drafting…' : 'Cover letter'} />
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={makeCoverLetter}
+                disabled={aiBusy !== null}
+                loading={aiBusy === 'cover'}
+                iconLeft={<FileText className="h-3.5 w-3.5" />}
+              >
+                {aiBusy === 'cover' ? 'Drafting…' : 'Cover letter'}
+              </Button>
             </div>
           )}
         </Card>
@@ -453,18 +555,19 @@ export function App() {
 
       {!jd && result && (
         <Card label="Job">
-          <span className="text-sm text-neutral-500">Couldn&apos;t read the job description.</span>
-          <button onClick={useSelectionAsJd} className="mt-1 block text-sm font-medium text-blue-600 hover:underline">
+          <span className="text-sm text-fg-muted">Couldn&apos;t read the job description.</span>
+          <Button variant="secondary" size="sm" onClick={useSelectionAsJd} className="mt-1.5" iconRight={<ArrowRight className="h-3.5 w-3.5" />}>
             Select it on the page → use as JD
-          </button>
+          </Button>
         </Card>
       )}
 
       {aiBusy && (
         <Card label={aiBusy === 'analyze' ? 'Analyzing…' : aiBusy === 'answers' ? 'Writing answers…' : 'Drafting cover letter…'}>
-          <div className="flex flex-col gap-1.5">
-            <div className="h-2 w-3/4 animate-pulse rounded bg-neutral-200" />
-            <div className="h-2 w-1/2 animate-pulse rounded bg-neutral-200" />
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-3 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
+            <Skeleton className="h-3 w-2/3" />
           </div>
         </Card>
       )}
@@ -473,16 +576,26 @@ export function App() {
 
       {coverLetter && (
         <Card label="Cover letter">
-          <p className="whitespace-pre-wrap text-xs text-neutral-700">{coverLetter}</p>
+          <p className="whitespace-pre-wrap text-xs text-fg-muted">{coverLetter}</p>
           <div className="mt-2 flex gap-2">
-            <Pill onClick={() => navigator.clipboard.writeText(coverLetter)} label="Copy" />
-            {coverField && <Pill onClick={insertCoverLetter} label="Insert into form" />}
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(coverLetter);
+                toast('Cover letter copied.', 'success');
+              }}
+              iconLeft={<Copy className="h-3.5 w-3.5" />}
+            >
+              Copy
+            </Button>
+            {coverField && (
+              <Button variant="secondary" size="sm" onClick={insertCoverLetter} iconLeft={<CornerDownLeft className="h-3.5 w-3.5" />}>
+                Insert into form
+              </Button>
+            )}
           </div>
         </Card>
-      )}
-
-      {error && (
-        <Card label="Error"><span className="text-sm text-red-600">{error.detail}</span></Card>
       )}
 
       {result && (
@@ -491,15 +604,17 @@ export function App() {
             {result.filled.map((id) => (
               <li key={id} className="flex items-center justify-between gap-2 text-sm">
                 <span className="truncate">{labelFor(id)}</span>
-                <Badge fill={fillFor(id)} />
+                <FillBadge fill={fillFor(id)} />
               </li>
             ))}
-            {result.filled.length === 0 && <li className="text-sm text-neutral-500">No deterministic matches.</li>}
+            {result.filled.length === 0 && <li className="text-sm text-fg-muted">No deterministic matches.</li>}
           </ul>
           {result.failed.length > 0 && (
-            <ul className="mt-2 flex flex-col gap-1 border-t border-neutral-200 pt-2">
+            <ul className="mt-2 flex flex-col gap-1 border-t border-border pt-2">
               {result.failed.map((f) => (
-                <li key={f.fieldId} className="text-xs text-neutral-500">{labelFor(f.fieldId)} — {f.reason}</li>
+                <li key={f.fieldId} className="text-xs text-fg-subtle">
+                  {labelFor(f.fieldId)} — {f.reason}
+                </li>
               ))}
             </ul>
           )}
@@ -511,14 +626,14 @@ export function App() {
           <div className="flex flex-col gap-3">
             {aiFills.map((f) => (
               <div key={f.fieldId}>
-                <div className="truncate text-xs font-medium text-neutral-600">{labelFor(f.fieldId)}</div>
-                <textarea
-                  className="mt-1 w-full rounded border border-neutral-300 px-2 py-1 text-xs"
+                <div className="truncate text-xs font-medium text-fg-muted">{labelFor(f.fieldId)}</div>
+                <Textarea
+                  className="mt-1 text-xs"
                   rows={3}
                   value={edits[f.fieldId] ?? f.value}
                   onChange={(e) => setEdits((prev) => ({ ...prev, [f.fieldId]: e.target.value }))}
                 />
-                <button onClick={() => saveEditedAnswer(f)} className="mt-0.5 text-[11px] font-medium text-blue-600 hover:underline">
+                <button onClick={() => saveEditedAnswer(f)} className="mt-1 text-[11px] font-medium text-info hover:underline">
                   Save &amp; refill (remembers for next time)
                 </button>
               </div>
@@ -535,21 +650,14 @@ export function App() {
                 <span className="truncate">
                   <span className="font-medium">{a.company || '—'}</span> · {a.role || 'role'}
                 </span>
-                <span className="flex shrink-0 items-center gap-2 text-neutral-400">
+                <span className="flex shrink-0 items-center gap-1.5 text-fg-subtle">
                   <span>
                     {a.matchScore ? `${a.matchScore} · ` : ''}
                     {new Date(a.appliedAt).toLocaleDateString()}
                   </span>
-                  <button
-                    aria-label="Delete"
-                    onClick={async () => {
-                      await deleteApplication(a.id);
-                      setHistory(await recentApplications(8));
-                    }}
-                    className="text-neutral-300 hover:text-red-500"
-                  >
-                    ×
-                  </button>
+                  <IconButton label="Delete application" onClick={() => setPendingDelete(a)} className="h-6 w-6 hover:text-danger">
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </IconButton>
                 </span>
               </li>
             ))}
@@ -557,55 +665,59 @@ export function App() {
         </Card>
       )}
 
-      <footer className="mt-auto text-[11px] text-neutral-400">Review highlighted fields on the page, then submit yourself.</footer>
+      <footer className="mt-auto text-[11px] text-fg-subtle">Review highlighted fields on the page, then submit yourself.</footer>
+
+      <Dialog
+        open={!!pendingDelete}
+        onClose={() => setPendingDelete(null)}
+        title="Delete this application?"
+        description={pendingDelete ? `${pendingDelete.company || '—'} · ${pendingDelete.role || 'role'}` : ''}
+        confirmLabel="Delete"
+        destructive
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }
 
 function MatchCard({ analysis, match }: { analysis: JobAnalysis; match: MatchScore }) {
-  const color =
-    match.verdict === 'strong' ? 'bg-green-100 text-green-800' : match.verdict === 'moderate' ? 'bg-yellow-100 text-yellow-800' : 'bg-red-100 text-red-800';
+  const variant = match.verdict === 'strong' ? 'success' : match.verdict === 'moderate' ? 'warning' : 'danger';
   return (
     <Card label="Match">
       <div className="flex items-center gap-2">
-        <span className={`rounded px-2 py-1 text-sm font-bold ${color}`}>{match.score}</span>
+        <Badge variant={variant} className="text-sm">
+          {match.score}
+        </Badge>
         <span className="text-sm font-medium capitalize">{match.verdict} fit</span>
-        <span className="ml-auto text-xs text-neutral-400">{analysis.seniority}</span>
+        <span className="ml-auto text-xs text-fg-subtle">{analysis.seniority}</span>
       </div>
       {match.strengths.length > 0 && (
-        <ul className="mt-2 flex flex-col gap-0.5 text-xs text-green-700">{match.strengths.slice(0, 4).map((s, i) => <li key={i}>✓ {s}</li>)}</ul>
+        <ul className="mt-2 flex flex-col gap-1 text-xs text-fg-muted">
+          {match.strengths.slice(0, 4).map((s, i) => (
+            <li key={i} className="flex gap-1.5">
+              <Check className="mt-0.5 h-3 w-3 shrink-0 text-success" />
+              <span>{s}</span>
+            </li>
+          ))}
+        </ul>
       )}
       {match.gaps.length > 0 && (
-        <ul className="mt-1 flex flex-col gap-0.5 text-xs text-yellow-700">{match.gaps.slice(0, 4).map((g, i) => <li key={i}>⚠ {g}</li>)}</ul>
+        <ul className="mt-1.5 flex flex-col gap-1 text-xs text-fg-muted">
+          {match.gaps.slice(0, 4).map((g, i) => (
+            <li key={i} className="flex gap-1.5">
+              <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-warning" />
+              <span>{g}</span>
+            </li>
+          ))}
+        </ul>
       )}
-      {match.recommendation && <p className="mt-2 text-xs text-neutral-600">{match.recommendation}</p>}
+      {match.recommendation && <p className="mt-2 text-xs text-fg-muted">{match.recommendation}</p>}
     </Card>
   );
 }
 
-function Card({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <section className="rounded-lg border border-neutral-200 bg-white p-3">
-      <div className="mb-1 text-[11px] uppercase tracking-wide text-neutral-400">{label}</div>
-      {children}
-    </section>
-  );
-}
-
-function Pill({ onClick, label, disabled }: { onClick: () => void; label: string; disabled?: boolean }) {
-  return (
-    <button onClick={onClick} disabled={disabled} className="rounded bg-neutral-100 px-2 py-1 text-xs font-medium hover:bg-neutral-200 disabled:opacity-40">
-      {label}
-    </button>
-  );
-}
-
-function Badge({ fill }: { fill?: FieldFill }) {
-  if (fill?.source === 'reuse') return <span className="rounded bg-indigo-100 px-1.5 py-0.5 text-[11px] font-medium text-indigo-800">reused · review</span>;
-  if (fill?.source === 'ai') return <span className="rounded bg-blue-100 px-1.5 py-0.5 text-[11px] font-medium text-blue-800">AI · review</span>;
-  return fill?.needsReview ? (
-    <span className="rounded bg-yellow-100 px-1.5 py-0.5 text-[11px] font-medium text-yellow-800">review</span>
-  ) : (
-    <span className="rounded bg-green-100 px-1.5 py-0.5 text-[11px] font-medium text-green-800">auto</span>
-  );
+function FillBadge({ fill }: { fill?: FieldFill }) {
+  if (fill?.source === 'reuse') return <Badge variant="reuse">reused · review</Badge>;
+  if (fill?.source === 'ai') return <Badge variant="ai">AI · review</Badge>;
+  return fill?.needsReview ? <Badge variant="review">review</Badge> : <Badge variant="auto">auto</Badge>;
 }
