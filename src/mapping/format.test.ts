@@ -35,4 +35,16 @@ describe('normalizePhone', () => {
   it('drops stray characters', () => {
     expect(normalizePhone('415.555.1234 ext')).toBe('4155551234');
   });
+
+  it('prepends the India dial code for a national number', () => {
+    expect(normalizePhone('98765 43210', 'India')).toBe('+919876543210');
+  });
+
+  it('does not double-prefix when the country code is already present', () => {
+    expect(normalizePhone('91 98765 43210', 'India')).toBe('+919876543210');
+  });
+
+  it('keeps an explicit + over the locale dial code', () => {
+    expect(normalizePhone('+1 415 555 1234', 'India')).toBe('+14155551234');
+  });
 });

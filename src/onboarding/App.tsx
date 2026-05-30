@@ -14,6 +14,7 @@ import {
   type Settings,
   type Provider,
 } from '@/shared/settings';
+import { localeFor, COUNTRIES } from '@/shared/locale';
 import { Button, Card, Field, Input, ProgressSteps, Select, useTheme, useToast } from '@/ui';
 
 const STEPS = ['Welcome', 'Profile', 'Resume', 'AI key', 'Done'];
@@ -34,6 +35,12 @@ export function App() {
 
   const setPersonal = (patch: Partial<CandidateProfile['personal']>) =>
     setProfile((p) => ({ ...p, personal: { ...p.personal, ...patch } }));
+  const setLocation = (patch: Partial<CandidateProfile['personal']['location']>) =>
+    setProfile((p) => ({ ...p, personal: { ...p.personal, location: { ...p.personal.location, ...patch } } }));
+  const loc = localeFor(profile.personal.location.country);
+  const countryOptions = COUNTRIES.includes(profile.personal.location.country)
+    ? COUNTRIES
+    : [profile.personal.location.country, ...COUNTRIES].filter(Boolean);
 
   async function onResume(file: File | undefined) {
     if (!file) return;
@@ -104,7 +111,17 @@ export function App() {
             <Row label="First name" placeholder="Jane" value={profile.personal.firstName} onChange={(v) => setPersonal({ firstName: v })} />
             <Row label="Last name" placeholder="Doe" value={profile.personal.lastName} onChange={(v) => setPersonal({ lastName: v })} />
             <Row label="Email" type="email" placeholder="jane.doe@example.com" value={profile.personal.email} onChange={(v) => setPersonal({ email: v })} />
-            <Row label="Phone" type="tel" placeholder="+1 (555) 123-4567" value={profile.personal.phone} onChange={(v) => setPersonal({ phone: v })} />
+            <Field label="Country">
+              <Select value={profile.personal.location.country} onChange={(e) => setLocation({ country: e.target.value })}>
+                {countryOptions.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Row label="Phone" type="tel" placeholder={loc.phonePlaceholder} value={profile.personal.phone} onChange={(v) => setPersonal({ phone: v })} />
+            <Row label="City" placeholder="Bengaluru" value={profile.personal.location.city} onChange={(v) => setLocation({ city: v })} />
           </div>
           <StepNav onBack={back} onNext={advanceFromProfile} />
         </Card>

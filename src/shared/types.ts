@@ -73,10 +73,15 @@ export interface CandidateProfile {
   personal: {
     firstName: string;
     lastName: string;
+    middleName?: string;
+    preferredName?: string;
     email: string;
     phone: string;
-    location: { city: string; state: string; country: string; postalCode?: string };
-    links: { linkedin?: string; github?: string; portfolio?: string; other?: string[] };
+    pronouns?: string;
+    dateOfBirth?: string; // free text, e.g. "1995-04-12"
+    languages?: string[];
+    location: { line1?: string; city: string; state: string; country: string; postalCode?: string };
+    links: { linkedin?: string; github?: string; portfolio?: string; twitter?: string; other?: string[] };
   };
   eligibility: {
     workAuthorized: boolean;
@@ -84,8 +89,24 @@ export interface CandidateProfile {
     willingToRelocate: boolean;
     remoteOnly?: boolean;
     noticePeriodDays?: number;
+    noticePeriod?: string; // free text, e.g. "30 days" / "immediate"
     desiredSalary?: string;
+    currentSalary?: string; // current CTC / salary
+    expectedSalary?: string; // expected CTC / salary
+    availableStartDate?: string;
+    yearsExperience?: string;
+    citizenship?: string;
+    workAuthCountry?: string; // defaults to location.country
   };
+  // Optional self-identification. Left blank → deterministic mapping auto-selects
+  // a "decline / prefer not to say" option (always needs-review). Never invented.
+  demographics?: {
+    gender?: string;
+    raceEthnicity?: string;
+    veteranStatus?: string;
+    disabilityStatus?: string;
+  };
+  howHeard?: string; // "how did you hear about us"
   resume: { fileName: string; text: string; blobId?: string; updatedAt: number };
   workHistory: WorkItem[];
   education: EducationItem[];

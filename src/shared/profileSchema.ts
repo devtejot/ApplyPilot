@@ -40,9 +40,15 @@ export const profileSchema = z.object({
   personal: z.object({
     firstName: z.string(),
     lastName: z.string(),
+    middleName: z.string().optional(),
+    preferredName: z.string().optional(),
     email: z.string(),
     phone: z.string(),
+    pronouns: z.string().optional(),
+    dateOfBirth: z.string().optional(),
+    languages: z.array(z.string()).optional(),
     location: z.object({
+      line1: z.string().optional(),
       city: z.string(),
       state: z.string(),
       country: z.string(),
@@ -52,6 +58,7 @@ export const profileSchema = z.object({
       linkedin: z.string().optional(),
       github: z.string().optional(),
       portfolio: z.string().optional(),
+      twitter: z.string().optional(),
       other: z.array(z.string()).optional(),
     }),
   }),
@@ -61,8 +68,24 @@ export const profileSchema = z.object({
     willingToRelocate: z.boolean(),
     remoteOnly: z.boolean().optional(),
     noticePeriodDays: z.number().optional(),
+    noticePeriod: z.string().optional(),
     desiredSalary: z.string().optional(),
+    currentSalary: z.string().optional(),
+    expectedSalary: z.string().optional(),
+    availableStartDate: z.string().optional(),
+    yearsExperience: z.string().optional(),
+    citizenship: z.string().optional(),
+    workAuthCountry: z.string().optional(),
   }),
+  demographics: z
+    .object({
+      gender: z.string().optional(),
+      raceEthnicity: z.string().optional(),
+      veteranStatus: z.string().optional(),
+      disabilityStatus: z.string().optional(),
+    })
+    .optional(),
+  howHeard: z.string().optional(),
   resume: z.object({
     fileName: z.string(),
     text: z.string(),

@@ -9,6 +9,7 @@ import { profileSchema, isProfileComplete } from '@/shared/profileSchema';
 import { extractPdfText } from '@/profile/pdf';
 import { loadSettings, saveSettings, defaultSettings, modelsFor, defaultModelFor, type Settings, type Provider } from '@/shared/settings';
 import { exportBackup, importBackup, clearAllData } from '@/shared/dataAdmin';
+import { localeFor, COUNTRIES } from '@/shared/locale';
 import {
   Badge,
   Button,
@@ -47,6 +48,8 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
     setProfile((p) => ({ ...p, personal: { ...p.personal, location: { ...p.personal.location, ...patch } } }));
   const setEligibility = (patch: Partial<CandidateProfile['eligibility']>) =>
     setProfile((p) => ({ ...p, eligibility: { ...p.eligibility, ...patch } }));
+  const setDemographics = (patch: Partial<NonNullable<CandidateProfile['demographics']>>) =>
+    setProfile((p) => ({ ...p, demographics: { ...p.demographics, ...patch } }));
 
   async function onResume(file: File | undefined) {
     if (!file) return;
@@ -119,6 +122,11 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
   if (!loaded) return <div className="p-6 text-sm text-fg-muted">Loading…</div>;
 
   const complete = isProfileComplete(profile);
+  const loc = localeFor(profile.personal.location.country);
+  const countryOptions = COUNTRIES.includes(profile.personal.location.country)
+    ? COUNTRIES
+    : [profile.personal.location.country, ...COUNTRIES].filter(Boolean);
+  const salaryPlaceholder = `e.g. ${loc.currency}${loc.salaryTerm === 'CTC' ? '18,00,000' : '120,000'}`;
 
   return (
     <div className="text-fg">
@@ -139,13 +147,43 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
         <Grid>
           <Field label="First name" placeholder="Jane" value={profile.personal.firstName} onChange={(v) => setPersonal({ firstName: v })} />
           <Field label="Last name" placeholder="Doe" value={profile.personal.lastName} onChange={(v) => setPersonal({ lastName: v })} />
+          <Field label="Middle name" placeholder="Kumar" value={profile.personal.middleName ?? ''} onChange={(v) => setPersonal({ middleName: v })} />
+          <Field label="Preferred name" placeholder="Jane" value={profile.personal.preferredName ?? ''} onChange={(v) => setPersonal({ preferredName: v })} />
           <Field label="Email" type="email" placeholder="jane.doe@example.com" value={profile.personal.email} onChange={(v) => setPersonal({ email: v })} />
-          <Field label="Phone" type="tel" placeholder="+1 (555) 123-4567" value={profile.personal.phone} onChange={(v) => setPersonal({ phone: v })} />
-          <Field label="City" placeholder="San Francisco" value={profile.personal.location.city} onChange={(v) => setLocation({ city: v })} />
-          <Field label="State" placeholder="CA" value={profile.personal.location.state} onChange={(v) => setLocation({ state: v })} />
-          <Field label="Country" placeholder="United States" value={profile.personal.location.country} onChange={(v) => setLocation({ country: v })} />
-          <Field label="Postal code" placeholder="94102" value={profile.personal.location.postalCode ?? ''} onChange={(v) => setLocation({ postalCode: v })} />
+          <Field label="Phone" type="tel" placeholder={loc.phonePlaceholder} value={profile.personal.phone} onChange={(v) => setPersonal({ phone: v })} />
+          <Field label="Pronouns" placeholder="she/her" value={profile.personal.pronouns ?? ''} onChange={(v) => setPersonal({ pronouns: v })} />
+          <Field label="Date of birth" placeholder="1995-04-12" value={profile.personal.dateOfBirth ?? ''} onChange={(v) => setPersonal({ dateOfBirth: v })} />
         </Grid>
+        <div className="mt-3">
+          <Field label="Address" placeholder="12 MG Road" value={profile.personal.location.line1 ?? ''} onChange={(v) => setLocation({ line1: v })} />
+        </div>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="City" placeholder="Bengaluru" value={profile.personal.location.city} onChange={(v) => setLocation({ city: v })} />
+          {loc.states ? (
+            <FieldWrap label="State">
+              <Select value={profile.personal.location.state} onChange={(e) => setLocation({ state: e.target.value })}>
+                <option value="">Select…</option>
+                {loc.states.map((s) => (
+                  <option key={s} value={s}>
+                    {s}
+                  </option>
+                ))}
+              </Select>
+            </FieldWrap>
+          ) : (
+            <Field label="State / Province" placeholder="State" value={profile.personal.location.state} onChange={(v) => setLocation({ state: v })} />
+          )}
+          <FieldWrap label="Country">
+            <Select value={profile.personal.location.country} onChange={(e) => setLocation({ country: e.target.value })}>
+              {countryOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </Select>
+          </FieldWrap>
+          <Field label="Postal code" placeholder="560001" value={profile.personal.location.postalCode ?? ''} onChange={(v) => setLocation({ postalCode: v })} />
+        </div>
       </Section>
 
       <Section title="Links">
@@ -153,18 +191,40 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
           <Field label="LinkedIn" placeholder="https://linkedin.com/in/janedoe" value={profile.personal.links.linkedin ?? ''} onChange={(v) => setLinks({ linkedin: v })} />
           <Field label="GitHub" placeholder="https://github.com/janedoe" value={profile.personal.links.github ?? ''} onChange={(v) => setLinks({ github: v })} />
           <Field label="Portfolio" placeholder="https://janedoe.dev" value={profile.personal.links.portfolio ?? ''} onChange={(v) => setLinks({ portfolio: v })} />
+          <Field label="Twitter / X" placeholder="https://x.com/janedoe" value={profile.personal.links.twitter ?? ''} onChange={(v) => setLinks({ twitter: v })} />
         </Grid>
       </Section>
 
-      <Section title="Eligibility">
+      <Section title="Work eligibility">
         <div className="flex flex-col gap-2.5">
-          <Check label="Authorized to work" checked={profile.eligibility.workAuthorized} onChange={(v) => setEligibility({ workAuthorized: v })} />
+          <Check
+            label={`Authorized to work in ${loc.country}`}
+            checked={profile.eligibility.workAuthorized}
+            onChange={(v) => setEligibility({ workAuthorized: v })}
+          />
           <Check label="Requires visa sponsorship" checked={profile.eligibility.requiresSponsorship} onChange={(v) => setEligibility({ requiresSponsorship: v })} />
           <Check label="Willing to relocate" checked={profile.eligibility.willingToRelocate} onChange={(v) => setEligibility({ willingToRelocate: v })} />
+          <Check label="Open to remote only" checked={profile.eligibility.remoteOnly ?? false} onChange={(v) => setEligibility({ remoteOnly: v })} />
         </div>
-        <div className="mt-3">
-          <Field label="Desired salary" placeholder="$120,000" value={profile.eligibility.desiredSalary ?? ''} onChange={(v) => setEligibility({ desiredSalary: v })} />
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Field label="Citizenship / nationality" placeholder="Indian" value={profile.eligibility.citizenship ?? ''} onChange={(v) => setEligibility({ citizenship: v })} />
+          <Field label="Work authorization country" placeholder={loc.country} value={profile.eligibility.workAuthCountry ?? ''} onChange={(v) => setEligibility({ workAuthCountry: v })} />
         </div>
+      </Section>
+
+      <Section title="Compensation">
+        <Grid>
+          <Field label={`Current ${loc.salaryTerm}`} placeholder={salaryPlaceholder} value={profile.eligibility.currentSalary ?? ''} onChange={(v) => setEligibility({ currentSalary: v })} />
+          <Field label={`Expected ${loc.salaryTerm}`} placeholder={salaryPlaceholder} value={profile.eligibility.expectedSalary ?? ''} onChange={(v) => setEligibility({ expectedSalary: v })} />
+          <Field label="Notice period" placeholder="30 days" value={profile.eligibility.noticePeriod ?? ''} onChange={(v) => setEligibility({ noticePeriod: v })} />
+        </Grid>
+      </Section>
+
+      <Section title="Availability">
+        <Grid>
+          <Field label="Available start date" placeholder="2026-07-01" value={profile.eligibility.availableStartDate ?? ''} onChange={(v) => setEligibility({ availableStartDate: v })} />
+          <Field label="Years of experience" placeholder="7" value={profile.eligibility.yearsExperience ?? ''} onChange={(v) => setEligibility({ yearsExperience: v })} />
+        </Grid>
       </Section>
 
       <Section title="Resume">
@@ -204,6 +264,36 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
 
       <Section title="Certifications">
         <CertList items={profile.certifications} onChange={(certifications) => setProfile((p) => ({ ...p, certifications }))} />
+      </Section>
+
+      <Section title="Additional">
+        <div className="flex flex-col gap-3">
+          <Field
+            label="Languages (comma-separated)"
+            placeholder="English, Hindi"
+            value={(profile.personal.languages ?? []).join(', ')}
+            onChange={(v) => setProfile((p) => ({ ...p, personal: { ...p.personal, languages: splitList(v) } }))}
+          />
+          <Field
+            label="How did you hear about us"
+            placeholder="Referral, LinkedIn, Naukri…"
+            value={profile.howHeard ?? ''}
+            onChange={(v) => setProfile((p) => ({ ...p, howHeard: v }))}
+          />
+        </div>
+      </Section>
+
+      <Section title="Self-identification (optional)">
+        <p className="mb-3 text-xs text-fg-muted">
+          Optional. Left blank, ApplyPilot selects “Prefer not to say” / “Decline to self-identify” on these fields — and
+          always flags them for your review. Never invented.
+        </p>
+        <Grid>
+          <Field label="Gender" placeholder="e.g. Female" value={profile.demographics?.gender ?? ''} onChange={(v) => setDemographics({ gender: v })} />
+          <Field label="Race / ethnicity" placeholder="e.g. Asian" value={profile.demographics?.raceEthnicity ?? ''} onChange={(v) => setDemographics({ raceEthnicity: v })} />
+          <Field label="Veteran status" placeholder="e.g. Not a veteran" value={profile.demographics?.veteranStatus ?? ''} onChange={(v) => setDemographics({ veteranStatus: v })} />
+          <Field label="Disability status" placeholder="e.g. No" value={profile.demographics?.disabilityStatus ?? ''} onChange={(v) => setDemographics({ disabilityStatus: v })} />
+        </Grid>
       </Section>
 
       <Section title="AI provider">

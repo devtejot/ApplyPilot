@@ -21,7 +21,7 @@ export function emptyProfile(): CandidateProfile {
       lastName: '',
       email: '',
       phone: '',
-      location: { city: '', state: '', country: '' },
+      location: { city: '', state: '', country: 'India' },
       links: {},
     },
     eligibility: { workAuthorized: false, requiresSponsorship: false, willingToRelocate: false },
