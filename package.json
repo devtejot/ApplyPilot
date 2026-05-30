@@ -1,6 +1,6 @@
 {
   "name": "applypilot",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "AI-assisted job application autofill Chrome extension. Never auto-submits.",
   "type": "module",
   "private": true,
