@@ -287,7 +287,7 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
         </div>
       </Section>
 
-      <div className="sticky bottom-0 mt-4 flex items-center gap-3 border-t border-border bg-bg py-3">
+      <div className="sticky bottom-0 mt-4 flex items-center gap-3 border-t border-border bg-surface-muted py-3">
         <Button onClick={save}>Save profile</Button>
       </div>
 

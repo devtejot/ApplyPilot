@@ -430,7 +430,7 @@ export function App() {
 
   if (view === 'profile') {
     return (
-      <div className="h-full overflow-y-auto bg-bg p-4">
+      <div className="h-full overflow-y-auto bg-surface-muted p-4">
         <ProfileEditor onClose={() => setView('main')} onSaved={() => setView('main')} />
       </div>
     );
