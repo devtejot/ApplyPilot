@@ -1,0 +1,69 @@
+/*
+ * Shared design tokens for every ApplyPilot surface (popup, sidepanel, options,
+ * onboarding). Imported once per surface from its main.tsx BEFORE index.css.
+ *
+ * Tokens are HSL channel triplets ("H S% L%") with no hsl() wrapper, so Tailwind's
+ * alpha modifier works: bg-surface/50, text-fg/80, etc. (see tailwind.config.js,
+ * which maps each token to hsl(var(--x) / <alpha-value>)).
+ *
+ * Light values live in :root; dark overrides in .dark. useTheme() toggles the
+ * `dark` class on <html>.
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --bg: 0 0% 100%;
+    --surface: 0 0% 100%;
+    --surface-muted: 240 5% 96%;
+    --fg: 240 10% 4%;
+    --fg-muted: 240 4% 46%;
+    --fg-subtle: 240 4% 64%;
+    --border: 240 6% 90%;
+    --accent: 240 6% 10%; /* near-black primary (Linear/Vercel feel) */
+    --accent-fg: 0 0% 100%;
+    --ring: 240 5% 65%;
+    --success: 142 71% 40%; /* ~ legacy auto #16a34a */
+    --warning: 41 96% 40%; /* ~ legacy review #ca8a04 */
+    --danger: 0 72% 51%;
+    --info: 239 84% 67%; /* AI indigo */
+    --reuse: 243 75% 59%;
+  }
+
+  .dark {
+    --bg: 240 10% 4%;
+    --surface: 240 6% 10%;
+    --surface-muted: 240 5% 14%;
+    --fg: 0 0% 98%;
+    --fg-muted: 240 5% 65%;
+    --fg-subtle: 240 5% 45%;
+    --border: 240 5% 20%;
+    --accent: 0 0% 98%; /* inverts to light primary in dark */
+    --accent-fg: 240 6% 10%;
+    --ring: 240 5% 45%;
+    --success: 142 69% 58%;
+    --warning: 41 90% 56%;
+    --danger: 0 72% 65%;
+    --info: 239 84% 74%;
+    --reuse: 243 75% 70%;
+  }
+
+  /* Base page colors follow the theme on every surface. */
+  html {
+    background-color: hsl(var(--bg));
+    color: hsl(var(--fg));
+  }
+
+  /* Accessibility: honor the OS "reduce motion" setting everywhere. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}

@@ -5,6 +5,13 @@ import type { FieldFill, FillFailure } from '@/shared/types';
 
 export type FillResult = { ok: true } | { ok: false; reason: string };
 
+// Outline colors for filled fields, injected inline into the host page. Kept as
+// literal hex — the content script runs in the page's world and can't read the
+// extension's CSS variables — and aligned with the --success / --warning tokens.
+// High-contrast on unknown page backgrounds; intentionally not theme-following.
+const OUTLINE_AUTO = '#16a34a'; // matches token --success (high-confidence)
+const OUTLINE_REVIEW = '#ca8a04'; // matches token --warning (needs review)
+
 /**
  * Set a value the React-safe way: call the native value setter on the prototype
  * (controlled inputs ignore a plain `el.value =`), then dispatch input + change.
@@ -19,10 +26,7 @@ export function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value
 
 function mark(el: Element, f: FieldFill): void {
   el.setAttribute('data-applypilot', f.needsReview ? 'review' : 'auto');
-  (el as HTMLElement).style?.setProperty(
-    'outline',
-    f.needsReview ? '2px solid #ca8a04' : '2px solid #16a34a',
-  );
+  (el as HTMLElement).style?.setProperty('outline', `2px solid ${f.needsReview ? OUTLINE_REVIEW : OUTLINE_AUTO}`);
 }
 
 export function applyFill(root: ParentNode, f: FieldFill): FillResult {

@@ -1,6 +1,9 @@
 import { ProfileEditor } from '@/profile/ProfileEditor';
+import { ToastProvider, useTheme } from '@/ui';
 
 export function App() {
+  useTheme();
+
   // Close this options tab shortly after a save → focus returns to the prior tab.
   function closeSoon() {
     chrome.tabs.getCurrent().then((t) => {
@@ -9,8 +12,10 @@ export function App() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl bg-neutral-50 px-6 py-10">
-      <ProfileEditor onSaved={closeSoon} />
-    </div>
+    <ToastProvider>
+      <div className="mx-auto max-w-2xl px-6 py-10">
+        <ProfileEditor onSaved={closeSoon} />
+      </div>
+    </ToastProvider>
   );
 }

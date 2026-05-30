@@ -27,6 +27,14 @@ describe('settings', () => {
     expect(isConfigured({ ...defaultSettings(), apiKey: 'x' })).toBe(true);
   });
 
+  it('defaults theme to system and backfills legacy settings missing the field', () => {
+    expect(defaultSettings().theme).toBe('system');
+    const legacy = { provider: 'gemini', apiKey: '', model: 'gemini-2.5-flash' };
+    const parsed = settingsSchema.safeParse(legacy);
+    expect(parsed.success).toBe(true);
+    if (parsed.success) expect(parsed.data.theme).toBe('system');
+  });
+
   it('exposes a default model and model list per provider', () => {
     expect(defaultModelFor('claude')).toBe('claude-opus-4-8');
     expect(defaultModelFor('gemini')).toBe('gemini-2.5-flash');

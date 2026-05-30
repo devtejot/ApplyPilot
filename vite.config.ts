@@ -19,5 +19,12 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    rollupOptions: {
+      // Onboarding is opened programmatically (not a manifest field), so force
+      // @crxjs/Vite to emit + hash it like the other HTML entries.
+      input: {
+        onboarding: 'src/onboarding/index.html',
+      },
+    },
   },
 });
