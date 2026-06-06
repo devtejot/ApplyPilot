@@ -2,7 +2,7 @@
 // Validated with Zod at every boundary (DESIGN.md §1). Background is the only
 // router; content and panel never message each other directly.
 import { z } from 'zod';
-import { analysisResponseSchema } from '@/ai/contracts';
+import { analysisResponseSchema, resumeResponseSchema } from '@/ai/contracts';
 
 const AiQuestionSchema = z.object({
   id: z.string(),
@@ -143,6 +143,8 @@ export const MsgSchema = z.discriminatedUnion('kind', [
   }),
   z.object({ kind: z.literal('GENERATE_COVER_LETTER'), jd: JobDescriptionSchema }),
   z.object({ kind: z.literal('COVER_LETTER_RESULT'), coverLetter: z.string() }),
+  z.object({ kind: z.literal('TAILOR_RESUME'), jd: JobDescriptionSchema }),
+  z.object({ kind: z.literal('RESUME_RESULT'), resume: resumeResponseSchema }),
   z.object({ kind: z.literal('ERROR'), code: ErrorCodeSchema, detail: z.string() }),
 ]);
 
