@@ -24,6 +24,7 @@ export default defineConfig({
       // @crxjs/Vite to emit + hash it like the other HTML entries.
       input: {
         onboarding: 'src/onboarding/index.html',
+        resume: 'src/resume/index.html',
       },
     },
   },
