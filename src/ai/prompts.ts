@@ -3,6 +3,14 @@
 import type { JobDescription } from '@/shared/types';
 import type { AiQuestion } from './context';
 
+export type AnswerTone = 'concise' | 'balanced' | 'detailed';
+
+const TONE_DIRECTIVE: Record<AnswerTone, string> = {
+  concise: 'Keep every answer to 1–2 tight sentences.',
+  balanced: '',
+  detailed: 'Give thorough, specific answers — a short paragraph each — still grounded only in profile facts.',
+};
+
 export const SYSTEM_ANALYSIS =
   'You are a career assistant. Compare a candidate profile against a job description and ' +
   'return a JSON object matching the schema. Score the match 0-100 honestly. Be concise and specific.';
@@ -52,10 +60,12 @@ export function buildAnswersUser(
   profileContext: string,
   jd: JobDescription,
   questions: AiQuestion[],
+  tone: AnswerTone = 'balanced',
 ): string {
   const qLines = questions.map(
     (q) => `- id: ${q.id}${q.maxLength ? ` (max ${q.maxLength} chars)` : ''}\n  question: ${q.text}`,
   );
+  const directive = TONE_DIRECTIVE[tone];
   return [
     '<candidate_profile>',
     profileContext,
@@ -66,5 +76,6 @@ export function buildAnswersUser(
     '<questions>',
     ...qLines,
     '</questions>',
+    ...(directive ? ['', directive] : []),
   ].join('\n');
 }

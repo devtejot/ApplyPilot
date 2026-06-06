@@ -293,6 +293,37 @@ describe("mapField — demographics (decline default)", () => {
   });
 });
 
+describe("mapField — normalized + fuzzy fallback", () => {
+  const v = (label: string, p = rich, controlType: FieldDescriptor["controlType"] = "text") =>
+    mapField(field({ label, controlType }), p);
+
+  it("ignores required-markers and trailing punctuation in labels", () => {
+    expect(v("First Name *")!.value).toBe("Dev");
+    expect(v("Email (required):", rich, "email")!.value).toBe("dev@example.com");
+    expect(v("LinkedIn URL *")!.value).toBe("https://linkedin.com/in/dev");
+  });
+
+  it("matches reworded LinkedIn labels", () => {
+    expect(v("Url for LinkedIn")!.value).toBe("https://linkedin.com/in/dev");
+    expect(v("Your LinkedIn profile")!.value).toBe("https://linkedin.com/in/dev");
+    expect(v("Profile on LinkedIn")!.value).toBe("https://linkedin.com/in/dev");
+  });
+
+  it("fuzzily matches word-order variants that no exact rule covers", () => {
+    const title = v("Title (current)");
+    expect(title?.value).toBe("Staff Engineer");
+    expect(title?.needsReview).toBe(true); // fuzzy fills always reviewed
+    expect(title!.confidence).toBeLessThan(0.85);
+
+    expect(v("Salary expected")?.value).toBe("26 LPA");
+  });
+
+  it("does not fuzzy-fire on unrelated labels that merely share a generic word", () => {
+    expect(v("Project name")).toBeNull();
+    expect(v("Company name")).toBeNull();
+  });
+});
+
 describe("mapDeterministic — batch", () => {
   it("returns one fill per matched field and skips the rest", () => {
     const fields = [

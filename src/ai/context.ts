@@ -1,6 +1,7 @@
 // Compact, deterministic AI context from a profile, plus selection of which
 // form fields warrant an AI-generated answer (DESIGN.md §5,§7).
 import type { CandidateProfile, FieldDescriptor } from '@/shared/types';
+import { normalizeLabel } from '@/forms/normalizeLabel';
 
 export interface AiQuestion {
   id: string;
@@ -58,7 +59,7 @@ function yn(b: boolean): string {
 const FREEFORM_MIN_LEN = 40;
 
 function isFreeformLabel(label: string): boolean {
-  const l = label.trim();
+  const l = normalizeLabel(label);
   return l.endsWith('?') || l.length > FREEFORM_MIN_LEN;
 }
 

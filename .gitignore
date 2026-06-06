@@ -6,3 +6,4 @@ applypilot.zip
 .env
 .env.*
 npm-debug.log*
+.superpowers/

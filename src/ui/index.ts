@@ -15,5 +15,7 @@ export { Skeleton } from './Skeleton';
 export { Spinner } from './Spinner';
 export { EmptyState } from './EmptyState';
 export { ProgressSteps, type ProgressStepsProps } from './ProgressSteps';
+export { Meter } from './Meter';
 export { ThemeToggle } from './ThemeToggle';
+export { PrivacyBadge, PrivacyDialog } from './PrivacyBadge';
 export { useTheme } from './useTheme';

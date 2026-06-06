@@ -18,6 +18,7 @@ import {
   buildAnalysisUser,
   buildAnswersUser,
   buildCoverLetterUser,
+  type AnswerTone,
 } from './prompts';
 
 export function analyzeJob(
@@ -34,11 +35,11 @@ export function analyzeJob(
 
 export function generateAnswers(
   provider: AIProvider,
-  args: { jd: JobDescription; profileContext: string; questions: AiQuestion[]; signal?: AbortSignal },
+  args: { jd: JobDescription; profileContext: string; questions: AiQuestion[]; tone?: AnswerTone; signal?: AbortSignal },
 ): Promise<AnswersResponse> {
   return provider.generateStructured({
     system: SYSTEM_ANSWERS,
-    user: buildAnswersUser(args.profileContext, args.jd, args.questions),
+    user: buildAnswersUser(args.profileContext, args.jd, args.questions, args.tone),
     schema: answersResponseSchema,
     signal: args.signal,
   });

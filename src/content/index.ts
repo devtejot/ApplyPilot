@@ -6,7 +6,7 @@ import { greenhouseAdapter } from '@/adapters/greenhouse';
 import { leverAdapter } from '@/adapters/lever';
 import { ashbyAdapter } from '@/adapters/ashby';
 import { genericAdapter } from '@/adapters/generic';
-import { applyFills } from '@/forms/fill';
+import { applyFills, clearFills } from '@/forms/fill';
 import { waitForSelector } from '@/dom/waitForSelector';
 import type { SiteAdapter } from '@/adapters/types';
 
@@ -72,6 +72,11 @@ chrome.runtime.onMessage.addListener((raw, _sender, sendResponse) => {
     case 'FILL': {
       const { filled, failed } = applyFills(document, msg.map);
       sendResponse({ kind: 'FILL_RESULT', filled, failed } satisfies Msg);
+      return false;
+    }
+
+    case 'CLEAR': {
+      sendResponse({ kind: 'CLEAR_RESULT', cleared: clearFills(document, msg.targets) } satisfies Msg);
       return false;
     }
 

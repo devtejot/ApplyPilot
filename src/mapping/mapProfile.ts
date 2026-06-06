@@ -3,6 +3,8 @@
 // Locale (profile country) shapes phone formatting. Sensitive/eligibility/
 // demographic answers always need review.
 import type { CandidateProfile, ControlType, FieldDescriptor, FieldFill } from '@/shared/types';
+import { dice } from '@/reuse/reuse';
+import { normalizeLabel, tokenizeLabel } from '@/forms/normalizeLabel';
 import { normalizePhone, normalizeUrl } from './format';
 
 // Text-like controls the rules below can fill. number/date included for salary,
@@ -35,11 +37,11 @@ const list = (xs?: string[]) => (xs && xs.length ? xs.join(', ') : undefined);
 const RULES: Rule[] = [
   // Contact + links
   { re: /\be-?mail\b/, get: (p) => p.personal.email },
-  { re: /\b(phone|mobile|telephone|cell)\b/, get: (p) => normalizePhone(p.personal.phone, p.personal.location.country) },
-  { re: /linkedin/, get: (p) => maybeUrl(p.personal.links.linkedin) },
-  { re: /github/, get: (p) => maybeUrl(p.personal.links.github) },
-  { re: /\b(twitter|x handle)\b/, get: (p) => maybeUrl(p.personal.links.twitter) },
-  { re: /\b(portfolio|website|personal site)\b/, get: (p) => maybeUrl(p.personal.links.portfolio) },
+  { re: /\b(phone|mobile|telephone|cell|contact (number|no))\b/, get: (p) => normalizePhone(p.personal.phone, p.personal.location.country) },
+  { re: /linked\s?in|\bli profile\b/, get: (p) => maybeUrl(p.personal.links.linkedin) },
+  { re: /git\s?hub/, get: (p) => maybeUrl(p.personal.links.github) },
+  { re: /\b(twitter|x handle|x profile)\b/, get: (p) => maybeUrl(p.personal.links.twitter) },
+  { re: /\b(portfolio|personal (web)?site|personal page|blog|website|web ?site)\b/, get: (p) => maybeUrl(p.personal.links.portfolio) },
 
   // Names
   { re: /\b(preferred name|nick ?name|known as)\b/, get: (p) => p.personal.preferredName },
@@ -95,6 +97,92 @@ function maybeUrl(raw?: string): string | undefined {
 
 function fullName(p: CandidateProfile): string {
   return `${p.personal.firstName} ${p.personal.lastName}`.trim();
+}
+
+// Fuzzy fallback (DESIGN.md §7): when no exact RULES keyword fires, match the
+// label's tokens against canonical field aliases. Generic enough to catch
+// unseen phrasings ("Url for linkedin", "Mobile no.", minor typos) without a
+// rule per variant. Always low-confidence + needsReview — the user verifies
+// before submit (the extension never auto-submits).
+interface AliasGroup {
+  aliases: string[];
+  get: (p: CandidateProfile) => string | undefined;
+}
+
+const FIELD_ALIASES: AliasGroup[] = [
+  { aliases: ['email', 'email address', 'e-mail'], get: (p) => p.personal.email },
+  {
+    aliases: ['phone', 'phone number', 'mobile', 'mobile number', 'contact number', 'telephone', 'cell phone'],
+    get: (p) => normalizePhone(p.personal.phone, p.personal.location.country),
+  },
+  { aliases: ['linkedin', 'linkedin profile', 'linkedin url', 'linkedin link', 'linkedin page'], get: (p) => maybeUrl(p.personal.links.linkedin) },
+  { aliases: ['github', 'github profile', 'github url'], get: (p) => maybeUrl(p.personal.links.github) },
+  { aliases: ['portfolio', 'portfolio url', 'personal website', 'personal site'], get: (p) => maybeUrl(p.personal.links.portfolio) },
+  { aliases: ['twitter', 'twitter handle', 'x profile'], get: (p) => maybeUrl(p.personal.links.twitter) },
+  { aliases: ['first name', 'given name', 'forename'], get: (p) => p.personal.firstName },
+  { aliases: ['last name', 'surname', 'family name'], get: (p) => p.personal.lastName },
+  { aliases: ['preferred name', 'nickname'], get: (p) => p.personal.preferredName },
+  { aliases: ['middle name'], get: (p) => p.personal.middleName },
+  { aliases: ['full name', 'legal name', 'candidate name'], get: (p) => fullName(p) },
+  { aliases: ['pronouns'], get: (p) => p.personal.pronouns },
+  { aliases: ['street address', 'mailing address'], get: (p) => p.personal.location.line1 },
+  { aliases: ['city', 'town'], get: (p) => p.personal.location.city },
+  { aliases: ['state', 'province', 'region'], get: (p) => p.personal.location.state },
+  { aliases: ['country'], get: (p) => p.personal.location.country },
+  { aliases: ['postal code', 'zip code', 'pincode', 'pin code', 'postcode'], get: (p) => p.personal.location.postalCode },
+  { aliases: ['current company', 'current employer', 'present employer'], get: (p) => currentJob(p)?.company },
+  { aliases: ['current title', 'current role', 'current designation', 'job title'], get: (p) => currentJob(p)?.title },
+  {
+    aliases: ['expected salary', 'desired salary', 'salary expectation', 'expected compensation', 'expected ctc'],
+    get: (p) => p.eligibility.expectedSalary ?? p.eligibility.desiredSalary,
+  },
+  { aliases: ['current salary', 'current ctc', 'current compensation'], get: (p) => p.eligibility.currentSalary },
+  { aliases: ['notice period'], get: (p) => p.eligibility.noticePeriod },
+  { aliases: ['years of experience', 'total experience', 'experience in years'], get: (p) => p.eligibility.yearsExperience },
+  { aliases: ['available start date', 'start date', 'joining date', 'date of joining', 'availability'], get: (p) => p.eligibility.availableStartDate },
+  { aliases: ['citizenship', 'nationality'], get: (p) => p.eligibility.citizenship },
+  { aliases: ['university', 'college', 'institution', 'alma mater'], get: (p) => latestEdu(p)?.school },
+  { aliases: ['degree', 'qualification'], get: (p) => latestEdu(p)?.degree },
+  { aliases: ['field of study', 'major', 'specialization'], get: (p) => latestEdu(p)?.field },
+];
+
+const FUZZY_THRESHOLD = 0.8;
+const FUZZY_CONFIDENCE = 0.6;
+
+// Token-subset match (all alias words present) is strong; otherwise fall back to
+// character-bigram similarity for typos / glued words. Single-word aliases only
+// trust short labels, so a stray "city" inside a long sentence won't fire.
+function aliasScore(label: string, labelTokens: Set<string>, alias: string): number {
+  const aTokens = tokenizeLabel(alias);
+  if (aTokens.length === 0) return 0;
+  if (aTokens.every((t) => labelTokens.has(t))) {
+    if (aTokens.length >= 2) return 0.95;
+    return labelTokens.size <= 4 ? 0.9 : 0;
+  }
+  return dice(label, alias);
+}
+
+function mapFuzzy(field: FieldDescriptor, profile: CandidateProfile): FieldFill | null {
+  const label = normalizeLabel(field.label);
+  const labelTokens = new Set(tokenizeLabel(field.label));
+  if (labelTokens.size === 0) return null;
+  let best: { value: string; score: number } | null = null;
+  for (const group of FIELD_ALIASES) {
+    let groupScore = 0;
+    for (const alias of group.aliases) groupScore = Math.max(groupScore, aliasScore(label, labelTokens, alias));
+    if (groupScore < FUZZY_THRESHOLD) continue;
+    const value = group.get(profile);
+    if (value && (!best || groupScore > best.score)) best = { value, score: groupScore };
+  }
+  if (!best) return null;
+  return {
+    fieldId: field.id,
+    selector: field.selector,
+    value: best.value,
+    confidence: FUZZY_CONFIDENCE,
+    source: 'deterministic',
+    needsReview: true,
+  };
 }
 
 const FREEFORM_MAX_LEN = 70;
@@ -195,7 +283,7 @@ function mapDemographics(field: FieldDescriptor, profile: CandidateProfile): Fie
 
 function mapText(field: FieldDescriptor, profile: CandidateProfile): FieldFill | null {
   if (isFreeform(field.label)) return null;
-  const label = field.label.toLowerCase();
+  const label = normalizeLabel(field.label);
   for (const rule of RULES) {
     if (!rule.re.test(label)) continue;
     const value = rule.get(profile);
@@ -210,7 +298,8 @@ function mapText(field: FieldDescriptor, profile: CandidateProfile): FieldFill |
       needsReview: confidence < REVIEW_THRESHOLD,
     };
   }
-  return null;
+  // No exact keyword fired — try the fuzzy alias fallback (always review).
+  return mapFuzzy(field, profile);
 }
 
 export function mapField(field: FieldDescriptor, profile: CandidateProfile): FieldFill | null {

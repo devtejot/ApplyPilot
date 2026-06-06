@@ -29,6 +29,11 @@ function mark(el: Element, f: FieldFill): void {
   (el as HTMLElement).style?.setProperty('outline', `2px solid ${f.needsReview ? OUTLINE_REVIEW : OUTLINE_AUTO}`);
 }
 
+function unmark(el: Element): void {
+  el.removeAttribute('data-applypilot');
+  (el as HTMLElement).style?.removeProperty('outline');
+}
+
 export function applyFill(root: ParentNode, f: FieldFill): FillResult {
   const el = root.querySelector(f.selector);
   if (!el) return { ok: false, reason: 'element not found' };
@@ -98,6 +103,37 @@ function fillCombobox(el: Element, f: FieldFill): FillResult {
   (option as HTMLElement).click?.();
   mark(el, f);
   return { ok: true };
+}
+
+// Undo a fill: blank the control and remove the review outline. Mirrors applyFill
+// across input/textarea/select/radio/checkbox. Never touches submit.
+export function clearField(root: ParentNode, selector: string): boolean {
+  const els = [...root.querySelectorAll(selector)];
+  if (els.length === 0) return false;
+  for (const el of els) {
+    const tag = el.tagName.toLowerCase();
+    const type = (el.getAttribute('type') || '').toLowerCase();
+    if (tag === 'input' && (type === 'radio' || type === 'checkbox')) {
+      const m = el as HTMLInputElement;
+      if (m.checked) {
+        m.checked = false;
+        m.dispatchEvent(new Event('change', { bubbles: true }));
+      }
+    } else if (tag === 'input' || tag === 'textarea') {
+      setNativeValue(el as HTMLInputElement, '');
+    } else if (tag === 'select') {
+      (el as HTMLSelectElement).value = '';
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+    unmark(el);
+  }
+  return true;
+}
+
+export function clearFills(root: ParentNode, targets: { fieldId: string; selector: string }[]): string[] {
+  const cleared: string[] = [];
+  for (const t of targets) if (clearField(root, t.selector)) cleared.push(t.fieldId);
+  return cleared;
 }
 
 export function applyFills(

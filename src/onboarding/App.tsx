@@ -2,9 +2,10 @@
 // install (chrome.runtime.onInstalled, reason === 'install'). Reuses the same
 // profile/settings storage as the rest of the app, then sets onboardingComplete.
 import { useEffect, useId, useState } from 'react';
-import { ArrowLeft, ArrowRight, Check, Rocket, Sparkles, Upload } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Lock, Rocket, ShieldCheck, Sparkles, Upload } from 'lucide-react';
 import type { CandidateProfile } from '@/shared/types';
 import { loadProfile, saveProfile, emptyProfile } from '@/shared/profile';
+import { privacyPoints } from '@/shared/privacy';
 import { extractPdfText } from '@/profile/pdf';
 import {
   loadSettings,
@@ -17,7 +18,7 @@ import {
 import { localeFor, COUNTRIES } from '@/shared/locale';
 import { Button, Card, Field, Input, ProgressSteps, Select, useTheme, useToast } from '@/ui';
 
-const STEPS = ['Welcome', 'Profile', 'Resume', 'AI key', 'Done'];
+const STEPS = ['Welcome', 'Privacy', 'Profile', 'Resume', 'AI key', 'Done'];
 
 export function App() {
   useTheme();
@@ -85,9 +86,10 @@ export function App() {
   }
 
   return (
-    <div className="mx-auto flex min-h-screen max-w-lg flex-col gap-5 px-6 py-12 text-fg">
-      <ProgressSteps steps={STEPS} current={step} labeled />
+    <div className="flex min-h-screen flex-col items-center justify-center gap-7 bg-bg px-6 py-12 text-fg">
+      <ProgressSteps steps={STEPS} current={step} labeled className="justify-center" />
 
+      <div className="w-full max-w-lg">
       {step === 0 && (
         <Card className="flex flex-col items-center gap-3 p-8 text-center">
           <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-accent text-accent-fg">
@@ -105,9 +107,32 @@ export function App() {
       )}
 
       {step === 1 && (
+        <Card label="Private by design" className="p-6">
+          <div className="mb-4 flex items-center gap-2">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-success/15 text-success">
+              <ShieldCheck className="h-5 w-5" />
+            </span>
+            <p className="text-sm text-fg-muted">Before we start — here&apos;s exactly where your data lives.</p>
+          </div>
+          <ul className="flex flex-col gap-3">
+            {privacyPoints().map((p) => (
+              <li key={p.title} className="flex gap-2.5">
+                <Lock className="mt-0.5 h-4 w-4 shrink-0 text-success" />
+                <div>
+                  <div className="text-sm font-medium text-fg">{p.title}</div>
+                  <div className="text-xs text-fg-muted">{p.detail}</div>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <StepNav onBack={back} onNext={next} />
+        </Card>
+      )}
+
+      {step === 2 && (
         <Card label="About you" className="p-6">
-          <p className="mb-4 text-sm text-fg-muted">Stored only on this device. Used to autofill applications.</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <p className="mb-5 text-sm text-fg-muted">Stored only on this device. Used to autofill applications.</p>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <Row label="First name" placeholder="Jane" value={profile.personal.firstName} onChange={(v) => setPersonal({ firstName: v })} />
             <Row label="Last name" placeholder="Doe" value={profile.personal.lastName} onChange={(v) => setPersonal({ lastName: v })} />
             <Row label="Email" type="email" placeholder="jane.doe@example.com" value={profile.personal.email} onChange={(v) => setPersonal({ email: v })} />
@@ -127,7 +152,7 @@ export function App() {
         </Card>
       )}
 
-      {step === 2 && (
+      {step === 3 && (
         <Card label="Resume" className="p-6">
           <p className="mb-4 text-sm text-fg-muted">
             Upload your resume PDF — its text gives the AI context for tailored answers. Optional, you can add it later.
@@ -143,13 +168,13 @@ export function App() {
         </Card>
       )}
 
-      {step === 3 && (
+      {step === 4 && (
         <Card label="AI key (optional)" className="p-6">
           <p className="mb-4 text-sm text-fg-muted">
             Bring your own API key to unlock AI answers, fit analysis, and cover letters. Autofill works without one — you
             can skip this.
           </p>
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             <Field label="Provider">
               <Select
                 value={settings.provider}
@@ -182,7 +207,7 @@ export function App() {
         </Card>
       )}
 
-      {step === 4 && (
+      {step === 5 && (
         <Card className="flex flex-col items-center gap-3 p-8 text-center">
           <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-success/15 text-success">
             <Check className="h-6 w-6" />
@@ -198,6 +223,7 @@ export function App() {
           </Button>
         </Card>
       )}
+      </div>
     </div>
   );
 }
@@ -212,7 +238,7 @@ function StepNav({
   nextLabel?: string;
 }) {
   return (
-    <div className="mt-5 flex items-center justify-between">
+    <div className="mt-6 flex items-center justify-between">
       <Button variant="ghost" size="sm" onClick={onBack} iconLeft={<ArrowLeft className="h-3.5 w-3.5" />}>
         Back
       </Button>

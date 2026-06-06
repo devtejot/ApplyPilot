@@ -6,8 +6,20 @@ import { ArrowLeft, Download, Trash2, Upload } from 'lucide-react';
 import type { CandidateProfile, WorkItem, EducationItem, ProjectItem, CertItem } from '@/shared/types';
 import { loadProfile, saveProfile, emptyProfile } from '@/shared/profile';
 import { profileSchema, isProfileComplete } from '@/shared/profileSchema';
+import { profileScore } from '@/shared/profileScore';
 import { extractPdfText } from '@/profile/pdf';
-import { loadSettings, saveSettings, defaultSettings, modelsFor, defaultModelFor, type Settings, type Provider } from '@/shared/settings';
+import {
+  loadSettings,
+  saveSettings,
+  defaultSettings,
+  modelsFor,
+  defaultModelFor,
+  setSessionKey,
+  clearSessionKey,
+  type Settings,
+  type Provider,
+} from '@/shared/settings';
+import { encryptKey } from '@/shared/keyCrypto';
 import { exportBackup, importBackup, clearAllData } from '@/shared/dataAdmin';
 import { localeFor, COUNTRIES } from '@/shared/locale';
 import {
@@ -17,6 +29,9 @@ import {
   Dialog,
   Field as FieldWrap,
   Input,
+  Meter,
+  PrivacyBadge,
+  PrivacyDialog,
   Select,
   Switch,
   Textarea,
@@ -31,6 +46,8 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
   const [resumeStatus, setResumeStatus] = useState('');
   const [settings, setSettings] = useState<Settings>(defaultSettings);
   const [confirmClear, setConfirmClear] = useState(false);
+  const [showPrivacy, setShowPrivacy] = useState(false);
+  const [passphrase, setPassphrase] = useState('');
 
   useEffect(() => {
     loadProfile().then((p) => {
@@ -83,11 +100,32 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
     });
   }
 
-  function saveAiSettings() {
-    saveSettings(settings).then(() => {
-      toast('AI settings saved.', 'success');
-      onSaved?.();
-    });
+  async function saveAiSettings() {
+    let toSave: Settings = { ...settings };
+    if (settings.keyEncrypted) {
+      const plaintext = settings.apiKey.trim();
+      if (plaintext) {
+        if (!passphrase.trim()) {
+          toast('Enter a passphrase to encrypt your key.', 'error');
+          return;
+        }
+        toSave = { ...toSave, apiKeyEnc: await encryptKey(plaintext, passphrase), apiKey: '' };
+        await setSessionKey(plaintext); // usable immediately this session
+      } else if (!settings.apiKeyEnc) {
+        toast('Enter your API key, then a passphrase to encrypt it.', 'error');
+        return;
+      }
+      // else: no new key typed — keep the existing ciphertext as-is
+    } else {
+      // Plaintext mode — drop any stale ciphertext + unlocked session copy.
+      toSave = { ...toSave, apiKeyEnc: undefined };
+      await clearSessionKey();
+    }
+    await saveSettings(toSave);
+    setSettings(toSave);
+    setPassphrase('');
+    toast('AI settings saved.', 'success');
+    onSaved?.();
   }
 
   async function downloadBackup() {
@@ -122,6 +160,7 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
   if (!loaded) return <div className="p-6 text-sm text-fg-muted">Loading…</div>;
 
   const complete = isProfileComplete(profile);
+  const score = profileScore(profile);
   const loc = localeFor(profile.personal.location.country);
   const countryOptions = COUNTRIES.includes(profile.personal.location.country)
     ? COUNTRIES
@@ -140,8 +179,19 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
           <h1 className="text-lg font-semibold">Profile</h1>
           <Badge variant={complete ? 'success' : 'warning'}>{complete ? 'Complete' : 'Incomplete'}</Badge>
         </div>
-        <p className="mt-1 text-xs text-fg-muted">Stored only on this device. Used to autofill applications.</p>
+        <div className="mt-1.5 flex items-center gap-2">
+          <PrivacyBadge onClick={() => setShowPrivacy(true)} />
+          <span className="text-xs text-fg-muted">Used to autofill applications.</span>
+        </div>
+        <div className="mt-2.5 flex items-center gap-2">
+          <Meter percent={score.percent} className="max-w-[180px]" />
+          <span className="shrink-0 text-[11px] text-fg-subtle">
+            {score.percent}% complete
+            {score.missing.length > 0 && ` · add ${score.missing.slice(0, 3).join(', ').toLowerCase()}`}
+          </span>
+        </div>
       </header>
+      <PrivacyDialog open={showPrivacy} onClose={() => setShowPrivacy(false)} keyEncrypted={settings.keyEncrypted} />
 
       <Section title="Personal">
         <Grid>
@@ -319,7 +369,13 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
             label={settings.provider === 'gemini' ? 'Google AI API key' : 'Anthropic API key'}
             type="password"
             value={settings.apiKey}
-            placeholder={settings.provider === 'gemini' ? 'AIza…' : 'sk-ant-…'}
+            placeholder={
+              settings.keyEncrypted && settings.apiKeyEnc && !settings.apiKey
+                ? '•••••• encrypted — type to replace'
+                : settings.provider === 'gemini'
+                  ? 'AIza…'
+                  : 'sk-ant-…'
+            }
             onChange={(v) => setSettings((s) => ({ ...s, apiKey: v }))}
           />
           <a
@@ -332,6 +388,26 @@ export function ProfileEditor({ onSaved, onClose }: { onSaved?: () => void; onCl
               ? 'Get a free key at aistudio.google.com/apikey →'
               : 'Get a key at console.anthropic.com →'}
           </a>
+
+          <div className="rounded-md border border-border bg-surface-muted p-3">
+            <Switch
+              checked={settings.keyEncrypted}
+              onChange={(v) => setSettings((s) => ({ ...s, keyEncrypted: v }))}
+              label="Encrypt my API key with a passphrase"
+            />
+            {settings.keyEncrypted && (
+              <div className="mt-2.5 flex flex-col gap-2">
+                <p className="text-[11px] text-fg-subtle">
+                  Stored encrypted (AES-GCM); unlocked in memory each browser session. We never store the passphrase — if
+                  you forget it, just re-enter your key.
+                </p>
+                <Field label="Passphrase" type="password" value={passphrase} placeholder="Choose a passphrase" onChange={setPassphrase} />
+                {settings.apiKeyEnc && !settings.apiKey && (
+                  <p className="text-[11px] text-fg-subtle">A key is already encrypted. Type a new key above to replace it.</p>
+                )}
+              </div>
+            )}
+          </div>
 
           <FieldWrap label="Model">
             <Select value={settings.model} onChange={(e) => setSettings((s) => ({ ...s, model: e.target.value }))}>

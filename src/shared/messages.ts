@@ -85,6 +85,7 @@ const ErrorCodeSchema = z.enum([
   'NETWORK',
   'BAD_AI_JSON',
   'INVALID_KEY',
+  'LOCKED',
   'FILL_FAILED',
   'UNKNOWN',
 ]);
@@ -112,6 +113,12 @@ export const MsgSchema = z.discriminatedUnion('kind', [
     filled: z.array(z.string()),
     failed: z.array(FillFailureSchema),
   }),
+  z.object({
+    kind: z.literal('CLEAR'),
+    tabId: z.number(),
+    targets: z.array(z.object({ fieldId: z.string(), selector: z.string() })),
+  }),
+  z.object({ kind: z.literal('CLEAR_RESULT'), cleared: z.array(z.string()) }),
   // AI (panel → background; background owns the key + makes the call)
   z.object({ kind: z.literal('ANALYZE'), jd: JobDescriptionSchema }),
   z.object({
@@ -123,6 +130,10 @@ export const MsgSchema = z.discriminatedUnion('kind', [
     kind: z.literal('GENERATE_ANSWERS'),
     jd: JobDescriptionSchema,
     questions: z.array(AiQuestionSchema),
+    // Length/voice directive for the answers. Optional → default voice.
+    tone: z.enum(['concise', 'balanced', 'detailed']).optional(),
+    // Force a fresh model call (skip the reuse bank) — used by single-answer regenerate.
+    skipReuse: z.boolean().optional(),
   }),
   z.object({
     kind: z.literal('ANSWERS_RESULT'),

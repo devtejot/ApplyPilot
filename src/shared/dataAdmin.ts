@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { profileSchema } from './profileSchema';
 import { db, type AnswerRecord } from './db';
 import { loadProfile, saveProfile } from './profile';
+import { clearSessionKey } from './settings';
 import type { CandidateProfile } from './types';
 
 const answerRecordSchema = z.object({
@@ -55,6 +56,7 @@ export async function importBackup(json: string): Promise<ParseResult> {
 /** Wipe everything local: profile, settings (incl. API key), history, answer bank. */
 export async function clearAllData(): Promise<void> {
   await chrome.storage.local.clear();
+  await clearSessionKey(); // drop any unlocked (decrypted) key from memory too
   await db.applications.clear();
   await db.answerBank.clear();
 }

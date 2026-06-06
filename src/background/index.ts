@@ -1,7 +1,7 @@
 // Background service worker — the hub. Owns AI calls + the API key (DESIGN.md §1).
 // Also owns the answer bank (reuse), since that's where answers are generated.
 import { parseMsg, type Msg } from '@/shared/messages';
-import { loadSettings, isConfigured } from '@/shared/settings';
+import { loadSettings, effectiveApiKey } from '@/shared/settings';
 import { loadProfile } from '@/shared/profile';
 import { makeProvider } from '@/ai/makeProvider';
 import { buildProfileContext } from '@/ai/context';
@@ -48,14 +48,23 @@ function errorReply(e: unknown): Msg {
 // Provider + profile context, or an ERROR Msg explaining what's missing.
 async function prepare() {
   const settings = await loadSettings();
-  if (!isConfigured(settings)) {
-    return { error: { kind: 'ERROR', code: 'INVALID_KEY', detail: 'Add your API key in settings.' } as Msg };
+  const apiKey = await effectiveApiKey(settings);
+  if (!apiKey) {
+    // Encrypted-but-not-unlocked → LOCKED (panel prompts for passphrase); else missing.
+    const locked = settings.keyEncrypted && !!settings.apiKeyEnc;
+    return {
+      error: {
+        kind: 'ERROR',
+        code: locked ? 'LOCKED' : 'INVALID_KEY',
+        detail: locked ? 'Unlock your encrypted API key to use AI.' : 'Add your API key in settings.',
+      } as Msg,
+    };
   }
   const profile = await loadProfile();
   if (!profile) {
     return { error: { kind: 'ERROR', code: 'UNKNOWN', detail: 'Set up your profile first.' } as Msg };
   }
-  return { provider: makeProvider(settings), profileContext: buildProfileContext(profile) };
+  return { provider: makeProvider({ ...settings, apiKey }), profileContext: buildProfileContext(profile) };
 }
 
 function withTimeout(): { signal: AbortSignal; clear: () => void } {
@@ -107,9 +116,10 @@ chrome.runtime.onMessage.addListener((raw, sender, sendResponse) => {
         const answers: { id: string; answer: string; confidence: number; reused: boolean }[] = [];
         const toAsk: typeof msg.questions = [];
 
-        // Reuse first (no key needed) — only the misses go to the model.
+        // Reuse first (no key needed) — only the misses go to the model. A
+        // regenerate request sets skipReuse to force a fresh answer.
         for (const q of msg.questions) {
-          const reuse = await findReusable(q.text, company);
+          const reuse = msg.skipReuse ? null : await findReusable(q.text, company);
           if (reuse) {
             answers.push({ id: q.id, answer: reuse.record.answer, confidence: reuse.score, reused: true });
           } else {
@@ -127,6 +137,7 @@ chrome.runtime.onMessage.addListener((raw, sender, sendResponse) => {
                 jd: msg.jd,
                 profileContext: prep.profileContext,
                 questions: toAsk,
+                tone: msg.tone,
                 signal: t.signal,
               }),
             );

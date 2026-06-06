@@ -156,5 +156,6 @@ export type ErrorCode =
   | 'NETWORK'
   | 'BAD_AI_JSON'
   | 'INVALID_KEY'
+  | 'LOCKED'
   | 'FILL_FAILED'
   | 'UNKNOWN';
