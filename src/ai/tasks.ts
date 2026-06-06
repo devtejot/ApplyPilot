@@ -7,17 +7,21 @@ import {
   analysisResponseSchema,
   answersResponseSchema,
   coverLetterSchema,
+  resumeResponseSchema,
   type AnalysisResponse,
   type AnswersResponse,
   type CoverLetterResponse,
+  type ResumeResponse,
 } from './contracts';
 import {
   SYSTEM_ANALYSIS,
   SYSTEM_ANSWERS,
   SYSTEM_COVER_LETTER,
+  SYSTEM_RESUME,
   buildAnalysisUser,
   buildAnswersUser,
   buildCoverLetterUser,
+  buildResumeUser,
   type AnswerTone,
 } from './prompts';
 
@@ -53,6 +57,18 @@ export function generateCoverLetter(
     system: SYSTEM_COVER_LETTER,
     user: buildCoverLetterUser(args.profileContext, args.jd),
     schema: coverLetterSchema,
+    signal: args.signal,
+  });
+}
+
+export function tailorResume(
+  provider: AIProvider,
+  args: { jd: JobDescription; profileContext: string; resumeText: string; signal?: AbortSignal },
+): Promise<ResumeResponse> {
+  return provider.generateStructured({
+    system: SYSTEM_RESUME,
+    user: buildResumeUser(args.profileContext, args.jd, args.resumeText),
+    schema: resumeResponseSchema,
     signal: args.signal,
   });
 }

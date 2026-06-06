@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { ZodType } from 'zod';
 import type { AIProvider } from './provider';
-import { analyzeJob, generateAnswers, generateCoverLetter } from './tasks';
+import { analyzeJob, generateAnswers, generateCoverLetter, tailorResume } from './tasks';
 import { analysisResponseSchema, answersResponseSchema, coverLetterSchema } from './contracts';
 import type { JobDescription } from '@/shared/types';
 
@@ -61,5 +61,27 @@ describe('generateCoverLetter', () => {
     const out = await generateCoverLetter(provider, { jd, profileContext: 'PROFILE' });
     expect(out.coverLetter).toContain('Dear team');
     expect(calls[0].schema).toBe(coverLetterSchema);
+  });
+});
+
+describe("tailorResume", () => {
+  it("calls the provider with the resume system prompt + schema and returns parsed output", async () => {
+    const resume = {
+      name: "Dev", headline: "Engineer", contact: {}, summary: "s",
+      experience: [], skills: [], education: [],
+    };
+    let seen: { system: string; user: string } | null = null;
+    const provider: AIProvider = {
+      id: "gemini",
+      generateStructured: async (args) => {
+        seen = { system: args.system, user: args.user };
+        return resume as unknown as never;
+      },
+    };
+    const jd = { title: "FE Eng", company: "Acme", text: "JD", url: "u", extractedBy: "adapter" as const };
+    const out = await tailorResume(provider, { jd, profileContext: "Name: Dev", resumeText: "RESUME" });
+    expect(out).toEqual(resume);
+    expect(seen!.system.toLowerCase()).toContain("never invent");
+    expect(seen!.user).toContain("RESUME");
   });
 });
