@@ -5,7 +5,7 @@ import { loadSettings, effectiveApiKey } from '@/shared/settings';
 import { loadProfile } from '@/shared/profile';
 import { makeProvider } from '@/ai/makeProvider';
 import { buildProfileContext } from '@/ai/context';
-import { analyzeJob, generateAnswers, generateCoverLetter } from '@/ai/tasks';
+import { analyzeJob, generateAnswers, generateCoverLetter, tailorResume } from '@/ai/tasks';
 import { withRetry } from '@/ai/retry';
 import { AIError } from '@/ai/provider';
 import { findReusable, saveAnswer } from '@/reuse/answerBank';
@@ -168,6 +168,35 @@ chrome.runtime.onMessage.addListener((raw, sender, sendResponse) => {
             generateCoverLetter(prep.provider, { jd: msg.jd, profileContext: prep.profileContext, signal: t.signal }),
           );
           sendResponse({ kind: 'COVER_LETTER_RESULT', coverLetter: res.coverLetter } satisfies Msg);
+        } catch (e) {
+          sendResponse(errorReply(e));
+        } finally {
+          t.clear();
+        }
+      })();
+      return true;
+    }
+
+    case 'TAILOR_RESUME': {
+      void (async () => {
+        const prep = await prepare();
+        if ('error' in prep) return sendResponse(prep.error);
+        const profile = await loadProfile();
+        const resumeText = profile?.resume.text?.trim();
+        if (!resumeText) {
+          return sendResponse({ kind: 'ERROR', code: 'UNKNOWN', detail: 'Add your resume in profile first.' } satisfies Msg);
+        }
+        const t = withTimeout();
+        try {
+          const resume = await withRetry(() =>
+            tailorResume(prep.provider, {
+              jd: msg.jd,
+              profileContext: prep.profileContext,
+              resumeText,
+              signal: t.signal,
+            }),
+          );
+          sendResponse({ kind: 'RESUME_RESULT', resume } satisfies Msg);
         } catch (e) {
           sendResponse(errorReply(e));
         } finally {
