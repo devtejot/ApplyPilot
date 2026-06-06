@@ -106,6 +106,7 @@ export function App() {
   const [profilePct, setProfilePct] = useState(0);
   const [profileMissing, setProfileMissing] = useState<string[]>([]);
   const [aiConfigured, setAiConfigured] = useState(false);
+  const [hasResume, setHasResume] = useState(false);
   const [needsEnable, setNeedsEnable] = useState(false);
 
   const [jd, setJd] = useState<JobDescription | null>(null);
@@ -122,7 +123,7 @@ export function App() {
   const [history, setHistory] = useState<ApplicationRecord[]>([]);
 
   const [busy, setBusy] = useState(false);
-  const [aiBusy, setAiBusy] = useState<'analyze' | 'answers' | 'cover' | null>(null);
+  const [aiBusy, setAiBusy] = useState<'analyze' | 'answers' | 'cover' | 'resume' | null>(null);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [onOwnPage, setOnOwnPage] = useState(false);
   const [view, setView] = useState<'main' | 'profile'>('main');
@@ -195,6 +196,7 @@ export function App() {
     setProfilePct(score.percent);
     setProfileMissing(score.missing);
     setAiConfigured(isConfigured(await loadSettings()));
+    setHasResume(!!p?.resume.text?.trim());
   }
 
   useEffect(() => {
@@ -457,6 +459,17 @@ export function App() {
     setAiBusy(null);
   }
 
+  async function tailorResumeForJd() {
+    if (!jd) return;
+    setAiBusy('resume');
+    const res = await sendToBackground({ kind: 'TAILOR_RESUME', jd });
+    if (res?.kind === 'RESUME_RESULT') {
+      await chrome.storage.session.set({ resumeDraft: { jd, resume: res.resume } });
+      await chrome.tabs.create({ url: chrome.runtime.getURL('src/resume/index.html') });
+    } else if (res?.kind === 'ERROR') aiError(res);
+    setAiBusy(null);
+  }
+
   async function insertCoverLetter() {
     const tabId = await activeTabId();
     if (!tabId || !coverField || !coverLetter) return;
@@ -667,6 +680,16 @@ export function App() {
               >
                 {aiBusy === 'cover' ? 'Drafting…' : 'Cover letter'}
               </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={tailorResumeForJd}
+                disabled={aiBusy !== null || !hasResume}
+                loading={aiBusy === 'resume'}
+                iconLeft={<FileText className="h-3.5 w-3.5" />}
+              >
+                {aiBusy === 'resume' ? 'Tailoring…' : 'Tailor resume'}
+              </Button>
             </div>
           )}
         </Card>
@@ -720,7 +743,7 @@ export function App() {
       )}
 
       {aiBusy && (
-        <Card label={aiBusy === 'analyze' ? 'Analyzing…' : aiBusy === 'answers' ? 'Writing answers…' : 'Drafting cover letter…'}>
+        <Card label={aiBusy === 'analyze' ? 'Analyzing…' : aiBusy === 'answers' ? 'Writing answers…' : aiBusy === 'resume' ? 'Tailoring resume…' : 'Drafting cover letter…'}>
           <div className="flex flex-col gap-2">
             <Skeleton className="h-3 w-3/4" />
             <Skeleton className="h-3 w-1/2" />
