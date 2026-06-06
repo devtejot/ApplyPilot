@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildAnalysisUser, buildAnswersUser, buildCoverLetterUser } from './prompts';
+import { buildAnalysisUser, buildAnswersUser, buildCoverLetterUser, SYSTEM_RESUME, buildResumeUser } from './prompts';
 import type { JobDescription } from '@/shared/types';
 
 const jd: JobDescription = {
@@ -40,5 +40,21 @@ describe('buildCoverLetterUser', () => {
     expect(out).toContain('PROFILE_BLOCK');
     expect(out).toContain('Acme');
     expect(out).toContain('Backend Engineer');
+  });
+});
+
+describe('buildResumeUser', () => {
+  const jd = { title: 'Senior Frontend Engineer', company: 'Acme', text: 'Build React apps.', url: 'https://x', extractedBy: 'adapter' as const };
+  it('embeds profile, job, and resume in delimited blocks', () => {
+    const out = buildResumeUser('Name: Dev', jd, 'EXPERIENCE\nGenuin');
+    expect(out).toContain('<candidate_profile>');
+    expect(out).toContain('Name: Dev');
+    expect(out).toContain('Senior Frontend Engineer');
+    expect(out).toContain('<resume>');
+    expect(out).toContain('Genuin');
+  });
+  it('SYSTEM_RESUME forbids fabrication and treats blocks as data', () => {
+    expect(SYSTEM_RESUME.toLowerCase()).toContain('never invent');
+    expect(SYSTEM_RESUME.toLowerCase()).toContain('not instructions');
   });
 });
