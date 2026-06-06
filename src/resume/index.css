@@ -1,0 +1,43 @@
+body { margin: 0; background: #525659; }
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding: 10px 16px;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+}
+.toolbar button {
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 6px;
+  border: 1px solid #d0d5dd;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+.toolbar button.primary { background: #1f5fa8; color: #fff; border-color: #1f5fa8; }
+.toolbar button:disabled { opacity: 0.5; cursor: default; }
+
+.empty { color: #fff; text-align: center; padding: 80px 24px; font-family: system-ui, sans-serif; }
+
+.paper {
+  width: 794px;
+  min-height: 1123px;
+  margin: 20px auto;
+  background: #fff;
+  padding: 44px 50px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.35);
+}
+.paper:focus { outline: none; }
+
+@media print {
+  body { background: #fff; }
+  .toolbar { display: none; }
+  .paper { width: auto; min-height: auto; margin: 0; padding: 0; box-shadow: none; }
+  @page { margin: 14mm; }
+}
