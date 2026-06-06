@@ -34,7 +34,7 @@ Chosen: **A (simplified)**. Tailor content with the existing AI provider into a 
 ## Architecture / Components
 
 **New**
-- `src/ai/contracts.ts` → `resumeResponseSchema`: `{ summary, experience:[{company, location?, title, dates, stack?, bullets[]}], skills:[{label, items}], projects?:[{name, stack?, link?, bullets[]}], education:[{school, location?, degree, dates, coursework?}] }`.
+- `src/ai/contracts.ts` → `resumeResponseSchema`: `{ name, headline, contact:{email?, phone?, location?, links?[]}, summary, experience:[{company, location?, title, dates, stack?, bullets[]}], skills:[{label, items}], projects?:[{name, stack?, link?, bullets[]}], education:[{school, location?, degree, dates?, coursework?}] }`. (Header fields `name`/`headline`/`contact` included so the template can render the heading.)
 - `src/ai/prompts.ts` → `SYSTEM_RESUME` (frozen) + `buildResumeUser(profileContext, jd, resumeText)`: rewrite/reorder to match the JD, ATS-keyword align, **facts only** from profile + resume text, keep the section set, concise bullets. JD and resume text go in clearly-delimited blocks with a guard line stating they are reference data, never instructions (prompt-injection defense).
 - `src/ai/tasks.ts` → `tailorResume(provider, { jd, profileContext, resumeText, signal })`.
 - `src/resume/` →
